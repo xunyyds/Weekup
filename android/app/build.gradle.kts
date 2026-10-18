@@ -10,8 +10,8 @@ android {
         applicationId = "com.xu.wake"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.5.1"
+        versionCode = 9
+        versionName = "2.5.2"
 
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
