@@ -109,7 +109,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         browser.settings.apply {
             userAgentString = if (desktopMode) DESKTOP_CHROME_UA else null
             useWideViewPort = true
-            loadWithOverviewMode = false
+            loadWithOverviewMode = desktopMode
         }
         browser.setInitialScale(0)
     }
@@ -157,12 +157,12 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         
         browser.settings.apply {
             userAgentString = if (desktop) DESKTOP_CHROME_UA else null
-            /* Desktop pages here are fixed canvases: body is 100vw x 100vh with overflow hidden,
-               the card is 624px wide, and there are no media queries. They only render correctly
-               at a desktop-ish width, so ask for a wide viewport and let overview mode scale the
-               finished layout down to the screen. */
+            /* Fixed-width pages (a 624px card on a 100vw/100vh body, no media queries) only lay
+               out correctly at a desktop-ish width, so ask for a wide viewport and let overview
+               mode scale the finished layout down to the screen. In mobile mode the page's own
+               meta viewport should drive layout instead, so overview stays off there. */
             useWideViewPort = true
-            loadWithOverviewMode = false
+            loadWithOverviewMode = desktop
         }
         browser.setInitialScale(0)
         applyViewportScript(browser, desktop)
@@ -289,7 +289,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         /* See applyMode(): desktop pages are fixed-width canvases and need a wide
                            viewport plus overview scaling to fit the screen. */
                         useWideViewPort = true
-                        loadWithOverviewMode = false
+                        loadWithOverviewMode = desktop
                         javaScriptEnabled = true
                         builtInZoomControls = true
                         displayZoomControls = false
@@ -732,38 +732,57 @@ private val PAGE_HEIGHT_SCRIPT = """
  */
 private val CAS_FIT_SCRIPT = """
 (function() {
-  try {
-    /* Detected by STRUCTURE, never by hostname: any fixed-width, absolutely-centred login
-       card gets the correction. Matching on host broke the post-login page on the same
-       origin, where body{display:flex} wrecked its layout. */
-    var card = document.querySelector('.login-card, .login-card-wrapper, [class*="login-card"]');
-    if (!card) return 'skip';
-    /* Only intervene when the card is actually absolutely positioned (a fixed canvas). */
-    var cardStyle = null;
-    try { cardStyle = window.getComputedStyle(card); } catch (e) { cardStyle = null; }
-    if (!cardStyle || (cardStyle.position !== 'absolute' && cardStyle.position !== 'fixed')) return 'skip';
-    var css = ''
-      + 'html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;'
-      + '  overflow-y:auto!important;}'
-      + '.bg,.bg-overlay{position:fixed!important;top:0!important;left:0!important;'
-      + '  width:100%!important;height:100%!important;}'
-      + 'body{display:flex!important;flex-direction:column!important;align-items:center!important;'
-      + '  justify-content:flex-start!important;padding:16px 0 24px!important;box-sizing:border-box!important;}'
-      + '.login-card{position:static!important;transform:none!important;margin:0 auto!important;'
-      + '  width:min(624px,94vw)!important;box-sizing:border-box!important;}'
-      + '.login-form{position:static!important;transform:none!important;left:auto!important;'
-      + '  width:min(304px,100%)!important;margin:0 auto!important;}'
-      + '.header{position:static!important;margin-bottom:8px!important;}'
-      + '.footer{position:static!important;margin-top:16px!important;}';
-    var el = document.getElementById('__xwake_cas_fit');
-    if (!el) {
-      el = document.createElement('style');
-      el.id = '__xwake_cas_fit';
-      (document.head || document.documentElement).appendChild(el);
-    }
-    if (el.textContent !== css) el.textContent = css;
-    return 'ok';
-  } catch (e) { return 'skip'; }
+  /*
+   * Layout correction for fixed-width single-sign-on pages.
+   *
+   * Such pages centre a fixed-width card on a 100vh canvas with overflow hidden. Scaled to a
+   * phone that leaves a large empty band under the card, so the card is put back into normal
+   * flow and the body sizes to its content.
+   *
+   * Detected by structure, never by hostname, so no particular deployment is baked in.
+   * Two rules this script must follow, both learned the hard way:
+   *   1. Never gate on getComputedStyle: this runs from onPageStarted, before the page's
+   *      stylesheets are parsed, so computed style still reports the defaults.
+   *   2. Never assume the card exists yet: watch for it briefly instead of giving up.
+   */
+  var CSS = ''
+    + 'html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;'
+    + '  overflow-y:auto!important;}'
+    + '.bg,.bg-overlay{position:fixed!important;top:0!important;left:0!important;'
+    + '  width:100%!important;height:100%!important;}'
+    + 'body{display:flex!important;flex-direction:column!important;align-items:center!important;'
+    + '  justify-content:flex-start!important;padding:16px 0 24px!important;box-sizing:border-box!important;}'
+    + '.login-card{position:static!important;transform:none!important;margin:0 auto!important;'
+    + '  width:min(624px,94vw)!important;box-sizing:border-box!important;}'
+    + '.login-form{position:static!important;transform:none!important;left:auto!important;'
+    + '  width:min(304px,100%)!important;margin:0 auto!important;}'
+    + '.header{position:static!important;margin-bottom:8px!important;}'
+    + '.footer{position:static!important;margin-top:16px!important;}';
+
+  function apply() {
+    try {
+      var card = document.querySelector('.login-card, .login-card-wrapper, [class*="login-card"]');
+      if (!card) return false;
+      var host = document.head || document.documentElement;
+      if (!host) return false;
+      var el = document.getElementById('__xwake_sso_fit');
+      if (!el) {
+        el = document.createElement('style');
+        el.id = '__xwake_sso_fit';
+        host.appendChild(el);
+      }
+      if (el.textContent !== CSS) el.textContent = CSS;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  if (apply()) return 'ok';
+  var tries = 0;
+  var timer = setInterval(function() {
+    tries += 1;
+    if (apply() || tries > 40) clearInterval(timer);
+  }, 50);
+  return 'deferred';
 })()
 """.trimIndent()
 
