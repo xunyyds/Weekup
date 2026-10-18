@@ -53,4 +53,51 @@ class SchoolParserTest {
         val source = "<table><tr><td>登录</td></tr></table>" + html()
         assertEquals(1, SchoolParser.parse(source).courses.size)
     }
+
+    /** 一个格子里并排多门课：整学期导出时的常见形态，此前会让整次导入失败。 */
+    @Test fun parsesSeveralCoursesInOneCell() {
+        val source = """
+            <table>
+            <tr><th>节次</th><th>星期一</th><th>星期二</th></tr>
+            <tr><td>第1节 08:00-08:45</td><td>
+              <div class="kbcontent">高等数学I<br>莫从庆<br>5-16(周)[01-02节]<br>图书馆304<br>----------------------<br>大学英语<br>李梅<br>3-8(周)[01-02节]<br>教1-201</div>
+            </td><td></td></tr></table>
+        """.trimIndent()
+        val courses = SchoolParser.parse(source).courses
+        assertEquals(2, courses.size)
+        assertEquals(setOf("高等数学I", "大学英语"), courses.map { it.name }.toSet())
+        val math = courses.first { it.name == "高等数学I" }
+        assertEquals((5..16).toList(), math.weeks)
+        assertEquals("图书馆304", math.location)
+        assertEquals("莫从庆", math.teacher)
+        val english = courses.first { it.name == "大学英语" }
+        assertEquals((3..8).toList(), english.weeks)
+        assertEquals("教1-201", english.location)
+    }
+
+    /** 提示性备注行不产生课程，也不阻断导入。 */
+    @Test fun noteRowDoesNotBlockImport() {
+        val source = """
+            <table>
+            <tr><th>节次</th><th>星期一</th><th>星期二</th></tr>
+            <tr><td>第1节 08:00-08:45</td><td><div class="kbcontent">数学<br>1-6周(单)</div></td><td></td></tr>
+            <tr><th>备注:</th><td colspan="2">军事技能 3-4周;军事理论 2-19周;劳动实践 2-19周;</td></tr>
+            </table>
+        """.trimIndent()
+        val courses = SchoolParser.parse(source).courses
+        assertEquals(1, courses.size)
+        assertEquals("数学", courses.single().name)
+    }
+
+    /** 个别格子读不出周次时只跳过它，其余课程照常导入。 */
+    @Test fun unreadableCellIsSkippedNotFatal() {
+        val source = """
+            <table>
+            <tr><th>节次</th><th>星期一</th><th>星期二</th></tr>
+            <tr><td>第1节 08:00-08:45</td><td><div class="kbcontent">数学<br>1-6周(单)</div></td><td><div class="kbcontent">没有周次的文字</div></td></tr></table>
+        """.trimIndent()
+        val courses = SchoolParser.parse(source).courses
+        assertEquals(1, courses.size)
+        assertEquals("数学", courses.single().name)
+    }
 }

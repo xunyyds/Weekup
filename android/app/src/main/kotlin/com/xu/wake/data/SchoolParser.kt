@@ -63,19 +63,12 @@ object SchoolParser {
         require(candidates.size == 1) { "未找到唯一可识别的课表；需要明确的星期表头" }
         val table = candidates.single()
         require(table.select("table").none { it !== table }) { "不支持嵌套课表" }
-        /* Merged cells are only a problem when they carry course data. A note row spanning the
-           full width ("备注:" with class/activity hints) is common and harmless, and rejecting it
-           failed otherwise perfectly readable timetables. */
-        val merged = table.select("td[rowspan],th[rowspan],td[colspan],th[colspan]")
-        require(merged.all { cell ->
-            val rowspan = cell.attr("rowspan").ifEmpty { "1" }
-            val colspan = cell.attr("colspan").ifEmpty { "1" }
-            (rowspan == "1" && colspan == "1") || isNoteCell(cell)
-        }) { "暂不支持合并单元格课表，请使用文件导入" }
         val rows = table.select("tr")
         var columns: Map<Int, Int>? = null
         var width = 0
         val courses = mutableListOf<CourseSession>()
+        /* 无法解析的格子文本样本，仅在最终一门课都没解析出来时用于给出可诊断的提示。 */
+        val skipped = mutableListOf<String>()
         val periods = linkedMapOf<Int, PeriodTime>()
         rows.forEach { row ->
             val cells = cells(row)
@@ -91,14 +84,21 @@ object SchoolParser {
             val mapping = columns ?: return@forEach
             if (cells.isEmpty()) return@forEach
             val first = cells.first().text().trim()
+            /*
+             * 备注行先于其他判断跳过。它有两种形态：首格是「备注:」这类字样，或某个格子
+             * 横跨整行。这类行不含课程，若继续往下走，其中的多条周次会被当成多门课，
+             * 也会被合并单元格守卫拦下——两种结果都会让整次导入失败。
+             */
+            val noteLike = first.startsWith("备注") || first.startsWith("说明")
+            val spansRow = cells.any { columnSpan(it) >= maxOf(2, width - 1) }
+            if (noteLike || spansRow) return@forEach
             val range = periodRange(first)
             if (range == null) {
-                /* Trailing "备注:" rows are common and carry no timetable data. Skip them
-                   explicitly rather than failing the import over a note line. */
-                if (first.startsWith("备注") || first.startsWith("说明") || first.startsWith("注")) return@forEach
                 require(cells.drop(1).all { it.text().isBlank() }) { "存在无法识别节次的非空行" }
                 return@forEach
             }
+            /* 真正承载课程的合并单元格仍然拒绝：行列模型会失真。 */
+            require(cells.all { rowSpan(it) == 1 && columnSpan(it) == 1 }) { "暂不支持合并单元格课表，请使用文件导入" }
             require(cells.size == width) { "课表列数不一致" }
             val (start, end) = range
             val times = Regex("(\\d{1,2})[:：](\\d{2})\\s*[-—~～至]\\s*(\\d{1,2})[:：](\\d{2})").find(first)
@@ -140,28 +140,22 @@ object SchoolParser {
                     copy.select("br").forEach { it.after("\n") }
                     val lines = copy.wholeText().replace('\u00a0', ' ').split('\n').map { it.trim() }.filter { it.isNotEmpty() }
                     if (lines.isEmpty() || lines.all { it in listOf("-", "--", "无", "暂无课程") }) return@blockLoop
-                    val matches = weekExpression.findAll(lines.joinToString(" ")).toList()
-                    require(matches.size == 1) { "部分课程周次不明确，拒绝导入" }
-                    val wm = matches.single()
-                    val fullText = lines.joinToString(" ")
-                    require(!Regex("[单双]\\s*周").containsMatchIn(fullText.removeRange(wm.range))) { "不支持此单双周标记位置" }
-                    val parity = wm.groupValues[2].ifEmpty { wm.groupValues[3] }
-                    val weeks = sortedSetOf<Int>()
-                    wm.groupValues[1].split(Regex("[,，、]")).forEach { piece ->
-                        val numbers = Regex("\\d+").findAll(piece).map { it.value.toInt() }.toList()
-                        val a = numbers.first(); val b = numbers.last()
-                        require(a in 1..60 && b in a..60) { "无效周次" }
-                        for (w in a..b) if (parity.isEmpty() || w % 2 == if (parity == "单") 1 else 0) weeks += w
+                    /* 整块就是一条备注时直接跳过，避免其中并列的多条周次被拆成多门课。 */
+                    if (lines.first().let { it.startsWith("备注") || it.startsWith("说明") }) return@blockLoop
+                    /* 一个格子里常常并排多门课，整学期导出时尤其明显。按周次出现的位置把文本
+                       切成若干段，每段一门课；切不出来的段落记录下来跳过，而不是让个别异常
+                       格子废掉整次导入。 */
+                    for (segment in splitByWeek(lines)) {
+                        val course = buildCourse(segment, day, start, end, block)
+                        if (course != null) courses += course else skipped += segment.joinToString(" ")
                     }
-                    val name = lines.first()
-                    require(!weekExpression.containsMatchIn(name)) { "未识别到独立课程名" }
-                    courses += CourseSession("网页-${UUID.randomUUID()}", name, day, start, end, weeks.toList(),
-                        block.selectFirst("[title=老师],[title=教师]")?.text()?.trim().orEmpty(),
-                        block.selectFirst("[title=教室],[title=地点]")?.text()?.trim().orEmpty())
                 }
             }
         }
-        require(courses.isNotEmpty()) { "未识别到课程" }
+        require(courses.isNotEmpty()) {
+            val sample = skipped.firstOrNull()?.take(90)
+            if (sample.isNullOrBlank()) "未识别到课程" else "未识别到课程；格子内容示例：$sample"
+        }
         val text = doc.body()?.text().orEmpty()
         fun metadata(pattern: String): Int? {
             val matches = Regex(pattern).findAll(text).map { it.groupValues[1].toInt() }.distinct().toList()
@@ -202,21 +196,78 @@ object SchoolParser {
     }
 
     /** A full-width note cell such as "备注: ..." — carries no timetable data. */
+    private fun columnSpan(cell: Element) = cell.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1
+
+    private fun rowSpan(cell: Element) = cell.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1
+
     /**
-     * A merged cell that carries no timetable data.
+     * 把一段格子文本按周次出现的位置切成若干段，每段对应一门课。
      *
-     * Campus timetables commonly end with one full-width summary row (military training,
-     * labour practice, "备注:" ...). Such a cell spans most of the table and never holds a
-     * weekday label, so it can be skipped instead of failing the whole import.
+     * 教务系统在一个格子里并排多门课是常态（同一时段有多门课，或整学期导出时把各周
+     * 的课叠在一起）。每一段都自带一条周次，因此以周次为界切分即可还原成多门课。
      */
-    private fun isNoteCell(cell: Element): Boolean {
-        val text = cell.text().trim()
-        if (text.isEmpty()) return true
-        if (weekday.matches(text)) return false
-        val colspan = cell.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1
-        val rowspan = cell.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1
-        /* Wide enough to be a summary band rather than a course slot. */
-        return colspan >= 3 || rowspan >= 3
+    private fun splitByWeek(lines: List<String>): List<List<String>> {
+        val body = lines.filterNot { isDivider(it) }
+        val segments = mutableListOf<List<String>>()
+        var pending = mutableListOf<String>()
+        /* 刚结束一门课：紧随其后的那一行是它的教室，而不是下一门课的课名。 */
+        var closed = false
+        for (line in body) {
+            val matches = weekExpression.findAll(line).toList()
+            if (matches.isEmpty()) {
+                if (closed && segments.isNotEmpty()) {
+                    segments[segments.lastIndex] = segments.last() + line
+                    closed = false
+                } else pending += line
+                continue
+            }
+            var cursor = 0
+            for (m in matches) {
+                segments += pending + line.substring(cursor, m.range.last + 1).trim()
+                pending = mutableListOf()
+                cursor = m.range.last + 1
+                closed = true
+            }
+            /* 同一行里周次之后的内容（如 "[01-02节]"）属于刚结束的那门课。 */
+            val rest = line.substring(cursor).trim()
+            if (rest.isNotEmpty()) segments[segments.lastIndex] = segments.last() + rest
+        }
+        if (pending.isNotEmpty() && segments.isNotEmpty()) segments[segments.lastIndex] = segments.last() + pending
+        return segments
+    }
+
+    /** 分隔两门课的横线（----------------------、===== 等）。 */
+    private fun isDivider(line: String) = Regex("^[-—_=*·•~]{3,}$").matches(line.trim())
+    /** 一段文本 -> 一门课；缺少周次、周次非法或找不到课名时返回 null，由调用方跳过。 */
+    private fun buildCourse(lines: List<String>, day: Int, start: Int, end: Int, block: Element): CourseSession? {
+        val text = lines.joinToString(" ")
+        val matches = weekExpression.findAll(text).toList()
+        if (matches.size != 1) return null
+        val wm = matches.single()
+        val parity = wm.groupValues[2].ifEmpty { wm.groupValues[3] }
+        val weeks = sortedSetOf<Int>()
+        for (piece in wm.groupValues[1].split(Regex("[,，、]"))) {
+            val numbers = Regex("\\d+").findAll(piece).map { it.value.toInt() }.toList()
+            if (numbers.isEmpty()) continue
+            val a = numbers.first(); val b = numbers.last()
+            if (a !in 1..60 || b !in a..60) return null
+            for (w in a..b) if (parity.isEmpty() || w % 2 == if (parity == "单") 1 else 0) weeks += w
+        }
+        if (weeks.isEmpty()) return null
+        /* 课名取周次之前的第一行；课名与周次同行时取该行周次之前的首个词。 */
+        val head = lines.takeWhile { !weekExpression.containsMatchIn(it) }
+        val headText = text.substring(0, wm.range.first).trim()
+        val name = (head.firstOrNull() ?: headText.split(' ').firstOrNull().orEmpty()).trim()
+        if (name.isEmpty() || weekExpression.containsMatchIn(name)) return null
+        val teacher = (head.drop(1).firstOrNull()
+            ?: headText.split(' ').drop(1).joinToString(" ").takeIf { it.isNotBlank() }
+            ?: block.selectFirst("[title=老师],[title=教师]")?.text()?.trim().orEmpty()).trim()
+        /* 教室是这一段的最后一行；它既不是课名，也不含周次。 */
+        val last = lines.lastOrNull()?.takeIf { it != name && !weekExpression.containsMatchIn(it) }
+        val location = (last
+            ?: text.substring(wm.range.last + 1).trim().takeIf { it.isNotBlank() }
+            ?: block.selectFirst("[title=教室],[title=地点]")?.text()?.trim().orEmpty()).trim()
+        return CourseSession("网页-${UUID.randomUUID()}", name, day, start, end, weeks.toList(), teacher, location)
     }
 
     private fun cells(row: Element): List<Element> = row.children().filter { it.tagName() == "td" || it.tagName() == "th" }

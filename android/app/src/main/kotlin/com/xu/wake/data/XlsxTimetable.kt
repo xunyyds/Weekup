@@ -68,19 +68,34 @@ object XlsxTimetable {
             for ((col, day) in columns) {
                 val text = line.getOrNull(col)?.trim().orEmpty()
                 if (text.isEmpty()) continue
-                courses += parseCell(text, day, start, end) ?: continue
+                courses += parseCell2(text, day, start, end)
             }
         }
         require(courses.isNotEmpty()) { "表格里没有可识别的课程" }
         return SchoolImport(courses, periods = periods.values.toList())
     }
 
-    /** 单个格子 -> 课程；文本里必须恰好有一条周次。 */
+    /**
+     * 一个格子可能并排多门课，按周次出现的位置切分，每段一门；切不出课的段直接跳过。
+     */
+    private fun parseCell2(text: String, day: Int, start: Int, end: Int): List<CourseSession> {
+        val flat = text.replace('\n', ' ').replace('\u00a0', ' ').replace(Regex("\\s+"), " ").trim()
+        if (flat.isEmpty()) return emptyList()
+        val found = weekExpression.findAll(flat).toList()
+        if (found.isEmpty()) return emptyList()
+        /* 每段从上一个周次结束处开始，到本段周次结束处为止。 */
+        return found.mapIndexedNotNull { index, _ ->
+            val from = if (index == 0) 0 else found[index - 1].range.last + 1
+            val to = if (index == found.size - 1) flat.length else found[index + 1].range.first
+            parseCell(flat.substring(from, to).trim(), day, start, end)
+        }
+    }
+
+    /** 单段文本 -> 课程；必须恰好一条周次。 */
     private fun parseCell(text: String, day: Int, start: Int, end: Int): CourseSession? {
         val flat = text.replace('\n', ' ').replace('\u00a0', ' ').replace(Regex("\\s+"), " ").trim()
         if (flat.isEmpty()) return null
         val matches = weekExpression.findAll(flat).toList()
-        /* 一个格子里有多门课或多个周次时无法可靠拆分，跳过而不是猜。 */
         if (matches.size != 1) return null
         val m = matches.single()
         val parity = m.groupValues[2].ifEmpty { m.groupValues[3] }

@@ -26,6 +26,14 @@ android {
         }
     }
     buildTypes {
+        /* debug 也使用 release 密钥。
+         *
+         * 默认的 debug 用自动生成的 ~/.android/debug.keystore，与 release 是两把不同的证书，
+         * Android 因此拒绝互相覆盖安装，每次换包都要先卸载，本地数据与登录态一并丢失。
+         * 让两者共用同一把密钥后，debug 与 release 可直接互相覆盖。 */
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
