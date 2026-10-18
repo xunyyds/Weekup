@@ -60,8 +60,32 @@ object SchoolParser {
         val candidates = doc.select("table").filter { table ->
             table.select("tr").filter { it.closest("table") == table }.any { row -> cells(row).count { weekday.matches(it.text().trim()) } >= 2 }
         }
-        require(candidates.size == 1) { "未找到唯一可识别的课表；需要明确的星期表头" }
-        val table = candidates.single()
+        require(candidates.isNotEmpty()) { "未找到唯一可识别的课表；需要明确的星期表头" }
+        /*
+         * 页面上可能同时存在多张带星期表头的表：例如首页的课表预览小部件（课程名被截断、
+         * 不含周次）与用户真正打开的理论课表。逐张尝试解析，取课程最多的一张；
+         * 数量并列时视为无法判定并拒绝，以免导入错误的表。
+         */
+        val failures = mutableListOf<String>()
+        val parsed = candidates.mapNotNull { table ->
+            try {
+                parseTable(table)
+            } catch (e: IllegalArgumentException) {
+                (e.message ?: "").takeIf { it.isNotBlank() }?.let { failures += it }
+                null
+            }
+        }
+        val ranked = parsed.sortedByDescending { it.first.size }
+        require(ranked.isNotEmpty()) { failures.firstOrNull() ?: "未识别到课程" }
+        require(ranked.size == 1 || ranked[0].first.size > ranked[1].first.size) {
+            "未找到唯一可识别的课表；需要明确的星期表头"
+        }
+        val (courses, periods) = ranked.first()
+        return trailingMetadata(doc, courses, periods, existingSchool)
+    }
+
+    /** 解析单张课表，返回课程与节次时间；无法识别时抛 [IllegalArgumentException]。 */
+    private fun parseTable(table: Element): Pair<List<CourseSession>, List<PeriodTime>> {
         require(table.select("table").none { it !== table }) { "不支持嵌套课表" }
         val rows = table.select("tr")
         var columns: Map<Int, Int>? = null
@@ -145,8 +169,11 @@ object SchoolParser {
                     /* 一个格子里常常并排多门课，整学期导出时尤其明显。按周次出现的位置把文本
                        切成若干段，每段一门课；切不出来的段落记录下来跳过，而不是让个别异常
                        格子废掉整次导入。 */
-                    for (segment in splitByWeek(lines)) {
-                        val course = buildCourse(segment, day, start, end, block)
+                    val segments = splitByWeek(lines)
+                    /* 站点用 title 标注教师与教室；一个块里并排多门课时该标注只对第一门有效。 */
+                    val useLabels = segments.size == 1
+                    for (segment in segments) {
+                        val course = buildCourse(segment, day, start, end, block, useLabels)
                         if (course != null) courses += course else skipped += segment.joinToString(" ")
                     }
                 }
@@ -156,6 +183,12 @@ object SchoolParser {
             val sample = skipped.firstOrNull()?.take(90)
             if (sample.isNullOrBlank()) "未识别到课程" else "未识别到课程；格子内容示例：$sample"
         }
+        val sorted = periods.values.sortedBy { it.period }
+        require(sorted.zipWithNext().all { (a, b) -> a.endMinutes <= b.startMinutes }) { "节次时间重叠" }
+        return courses.toList() to sorted
+    }
+
+    private fun trailingMetadata(doc: org.jsoup.nodes.Document, courses: List<CourseSession>, periods: List<PeriodTime>, existingSchool: String?): SchoolImport {
         val text = doc.body()?.text().orEmpty()
         fun metadata(pattern: String): Int? {
             val matches = Regex(pattern).findAll(text).map { it.groupValues[1].toInt() }.distinct().toList()
@@ -165,9 +198,7 @@ object SchoolParser {
         val total = metadata("(?:总周数|学期周数)\\s*[:：]?\\s*(\\d{1,2})(?!\\d)")
         val current = metadata("(?:当前周|教学周)\\s*[:：]?\\s*(?:第\\s*)?(\\d{1,2})(?!\\d)")
         require(total == null || courses.all { it.weeks.all { w -> w <= total } } && (current == null || current <= total)) { "周次超出学期" }
-        val sorted = periods.values.sortedBy { it.period }
-        require(sorted.zipWithNext().all { (a, b) -> a.endMinutes <= b.startMinutes }) { "节次时间重叠" }
-        return SchoolImport(courses.toList(), total, current, sorted,
+        return SchoolImport(courses, total, current, periods,
             existingSchool?.trim()?.takeIf { it.isNotEmpty() } ?: recognizeSchool(doc))
     }
 
@@ -238,8 +269,16 @@ object SchoolParser {
 
     /** 分隔两门课的横线（----------------------、===== 等）。 */
     private fun isDivider(line: String) = Regex("^[-—_=*·•~]{3,}$").matches(line.trim())
+    /** 编号、讲课量、节次标记这类行不是教室。 */
+    private fun isMetaLine(line: String): Boolean {
+        val t = line.trim()
+        if (t.startsWith("（") || t.startsWith("(")) return true
+        if (Regex("编号|讲课|学分|备注|说明").containsMatchIn(t)) return true
+        return Regex("^\\[?\\d+\\s*[-—~～至]\\s*\\d+\\s*节\\]?$").matches(t)
+    }
+
     /** 一段文本 -> 一门课；缺少周次、周次非法或找不到课名时返回 null，由调用方跳过。 */
-    private fun buildCourse(lines: List<String>, day: Int, start: Int, end: Int, block: Element): CourseSession? {
+    private fun buildCourse(lines: List<String>, day: Int, start: Int, end: Int, block: Element, useLabels: Boolean): CourseSession? {
         val text = lines.joinToString(" ")
         val matches = weekExpression.findAll(text).toList()
         if (matches.size != 1) return null
@@ -259,14 +298,23 @@ object SchoolParser {
         val headText = text.substring(0, wm.range.first).trim()
         val name = (head.firstOrNull() ?: headText.split(' ').firstOrNull().orEmpty()).trim()
         if (name.isEmpty() || weekExpression.containsMatchIn(name)) return null
-        val teacher = (head.drop(1).firstOrNull()
-            ?: headText.split(' ').drop(1).joinToString(" ").takeIf { it.isNotBlank() }
-            ?: block.selectFirst("[title=老师],[title=教师]")?.text()?.trim().orEmpty()).trim()
-        /* 教室是这一段的最后一行；它既不是课名，也不含周次。 */
-        val last = lines.lastOrNull()?.takeIf { it != name && !weekExpression.containsMatchIn(it) }
-        val location = (last
-            ?: text.substring(wm.range.last + 1).trim().takeIf { it.isNotBlank() }
-            ?: block.selectFirst("[title=教室],[title=地点]")?.text()?.trim().orEmpty()).trim()
+        /*
+         * 优先站点自己的 title 标注（"教师"/"教室"），它比位置推断可靠。
+         * 没有标注时才按位置推断：教师取课名之后、周次之前的行；教室取周次之后
+         * 第一条不是编号/讲课量之类的行。
+         */
+        val labelledTeacher = if (useLabels) block.selectFirst("[title=老师],[title=教师]")?.text()?.trim().orEmpty() else ""
+        val labelledRoom = if (useLabels) block.selectFirst("[title=教室],[title=地点]")?.text()?.trim().orEmpty() else ""
+        val teacher = labelledTeacher.ifEmpty {
+            head.drop(1).firstOrNull()
+                ?: headText.split(' ').drop(1).joinToString(" ").takeIf { it.isNotBlank() }
+                ?: ""
+        }.trim()
+        val tail = lines.dropWhile { !weekExpression.containsMatchIn(it) }.drop(1)
+        val positionalRoom = tail.firstOrNull { it.isNotBlank() && !isMetaLine(it) }
+            ?: lines.lastOrNull()?.takeIf { it != name && !weekExpression.containsMatchIn(it) && !isMetaLine(it) }
+            ?: text.substring(wm.range.last + 1).trim().takeIf { it.isNotBlank() && !isMetaLine(it) }
+        val location = labelledRoom.ifEmpty { positionalRoom.orEmpty() }.trim()
         return CourseSession("网页-${UUID.randomUUID()}", name, day, start, end, weeks.toList(), teacher, location)
     }
 

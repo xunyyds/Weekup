@@ -22,6 +22,7 @@ import android.os.SystemClock
 import android.view.View
 import android.webkit.*
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -195,20 +196,38 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         val generation = lifetime.generation
         scope.launch {
             try {
-                
-                val imported = withTimeout(20_000) {
-                    val raw = kotlinx.coroutines.suspendCancellableCoroutine<String> { continuation ->
-                        browser.evaluateJavascript(TABLE_EXTRACTION) { value ->
-                            if (continuation.isActive) continuation.resumeWith(Result.success(value ?: "null"))
+                /*
+                 * 首屏可能只是课表预览小部件（课名截断、没有周次），无法据以导入。
+                 * 第一次解析失败时点开菜单里的课表页，稍候再读一次，直至读出课程或次数用尽。
+                 */
+                val imported = withTimeout(45_000) {
+                    var failure: Exception? = null
+                    var observed = ""
+                    var attempt = 0
+                    var result: SchoolImport? = null
+                    while (result == null && attempt < 8) {
+                        try {
+                            val raw = kotlinx.coroutines.suspendCancellableCoroutine<String> { continuation ->
+                                browser.evaluateJavascript(TABLE_EXTRACTION) { value ->
+                                    if (continuation.isActive) continuation.resumeWith(Result.success(value ?: "null"))
+                                }
+                            }
+                            result = withContext(Dispatchers.Default) {
+                                require(raw.length <= 12_000_000) { "课表页面过大，请打开单独的课表页后重试" }
+                                val decoded = JSONTokener(raw).nextValue()
+                                require(decoded is String && decoded.isNotBlank()) { "当前页面没有可读取的课表 table；请先登录并打开课表页面" }
+                                require(decoded != "XWAKE_TABLE_TOO_LARGE") { "课表页面过大" }
+                                SchoolParser.parse(decoded, existingSchool)
+                            }
+                        } catch (e: Exception) {
+                            failure = e
+                            observed += "#" + (attempt + 1) + " " + (e.message ?: "?").take(36) + " | "
+                            if (attempt == 0) browser.evaluateJavascript(OPEN_TIMETABLE_SCRIPT, null)
+                            delay(1500)
                         }
+                        attempt += 1
                     }
-                    withContext(Dispatchers.Default) {
-                        require(raw.length <= 12_000_000) { "课表页面过大，请打开单独的课表页后重试" }
-                        val decoded = JSONTokener(raw).nextValue()
-                        require(decoded is String && decoded.isNotBlank()) { "当前页面没有可读取的课表 table；请先登录并打开课表页面" }
-                        require(decoded != "XWAKE_TABLE_TOO_LARGE") { "课表页面过大" }
-                        SchoolParser.parse(decoded, existingSchool)
-                    }
+                    result ?: throw IllegalStateException((failure?.message ?: "未识别到课程") + " 尝试记录：" + observed)
                 }
                 if (lifetime.alive && lifetime.generation == generation) recognized = imported
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -1024,5 +1043,37 @@ private val TABLE_EXTRACTION = """
     if (html.length > 2000000) return 'XWAKE_TABLE_TOO_LARGE';
   }
   return html;
+})()
+""".trimIndent()
+
+/*
+ * 打开课表页。
+ *
+ * 登录后落在「我的桌面」，那上面的课表只是预览小部件：课程名被截断，也不含周次，
+ * 无法据以导入。真正的课表要点开左侧菜单里的课表条目后才会加载进来。
+ * 这里按文字找到可点击的课表条目并触发它，优先「理论课表」，其次「学期」。
+ */
+private val OPEN_TIMETABLE_SCRIPT = """
+(function() {
+  function label(e) { return (e.textContent || '').replace(/\s+/g, ' ').trim(); }
+  var best = null;
+  var nodes = document.querySelectorAll('a,li,span,div');
+  for (var i = 0; i < nodes.length; i++) {
+    var e = nodes[i];
+    var t = label(e);
+    if (!t || t.length > 24) continue;
+    if (t.indexOf('课表') < 0) continue;
+    var href = e.getAttribute('href') || '';
+    var oc = e.getAttribute('onclick') || '';
+    if (!oc && (!href || href === '#')) continue;
+    var score = 0;
+    if (t.indexOf('理论课表') >= 0) score += 4;
+    if (t.indexOf('学期') >= 0) score += 2;
+    if (t.indexOf('我的课表') >= 0) score += 1;
+    if (!best || score > best.score) best = { el: e, score: score, text: t };
+  }
+  if (!best) return 'none';
+  best.el.click();
+  return 'clicked:' + best.text;
 })()
 """.trimIndent()

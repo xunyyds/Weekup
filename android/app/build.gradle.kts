@@ -10,8 +10,8 @@ android {
         applicationId = "com.xu.wake"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "2.5.0"
+        versionCode = 8
+        versionName = "2.5.1"
         /* arm64 for phones; x86_64 so emulators run natively instead of under ARM
            translation, which breaks WebView percentage-height layout. */
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
