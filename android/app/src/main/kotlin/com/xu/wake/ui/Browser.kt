@@ -146,14 +146,23 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     fun applyViewportScript(browser: WebView, desktop: Boolean) {
         val page = browser.url.orEmpty()
         if (!schoolWebUrl(page)) return
-        /* Desktop mode needs a desktop-sized layout viewport. These pages are fixed-width
-           canvases (a 624px card on 100vw/100vh with overflow hidden), so at phone width the
-           card overflows and gets clipped. A wide canvas plus overview scaling shows the whole
-           page.
-
-           Mobile mode leaves the page's own <meta viewport> alone. */
-        if (desktop) browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
+        /* Overview scaling is a WebView-level setting, so it cannot stay on for every page: it
+           rescales whatever is loaded, which squeezed the post-sign-on pages into a strip. The
+           viewport script reports whether this page is a fixed-width sign-on canvas; overview
+           mode then follows that answer instead of the mode toggle alone. */
         browser.evaluateJavascript(CAS_FIT_SCRIPT, null)
+        if (!desktop) {
+            browser.settings.loadWithOverviewMode = false
+            return
+        }
+        browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT) { result ->
+            if (!lifetime.alive) return@evaluateJavascript
+            /* 'fixed' = fixed-width page: keep the wide canvas and overview scaling.
+               'skip' = ordinary page: drop overview scaling and let its own viewport apply. */
+            val fixedWidth = result.orEmpty().contains("fixed")
+            browser.settings.loadWithOverviewMode = fixedWidth
+            if (!fixedWidth) browser.setInitialScale(0)
+        }
     }
     
     fun applyMode(browser: WebView, desktop: Boolean) {
@@ -754,28 +763,62 @@ private const val DESKTOP_VIEWPORT_WIDTH = 700
  */
 private val DESKTOP_VIEWPORT_SCRIPT = """
 (function() {
+  /*
+   * Reports whether the current page is a fixed-width sign-on canvas, and widens its viewport
+   * if so.
+   *
+   * Returns 'fixed' for a fixed-width page, 'skip' for an ordinary one. The caller uses that
+   * verdict to decide whether overview scaling should be on: leaving it on for ordinary pages
+   * squeezed the post-sign-on screens into a narrow strip.
+   */
   var CONTENT = 'width=@@W@@';
-  function apply() {
+
+  function isFixed() {
     try {
-      var host = document.head || document.documentElement;
-      if (!host) return false;
+      if (document.querySelector('.login-card, .login-card-wrapper, [class*="login-card"]')) return true;
+      var body = document.body;
+      if (!body) return null;
+      var s = window.getComputedStyle(body);
+      if (!s) return null;
+      var pinned = (s.overflow === 'hidden' || s.overflowY === 'hidden');
+      var cardish = document.querySelector('[class*="card"], [class*="login"], form');
+      return (pinned && !!cardish) ? true : false;
+    } catch (e) { return false; }
+  }
+
+  function apply() {
+    var host = document.head || document.documentElement;
+    if (!host) return 'skip';
+    if (!isFixed()) {
+      /* Ordinary page: remove any viewport we injected on a previous navigation. */
+      var mine = document.querySelector('meta[data-xwake-viewport]');
+      if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
+      return 'skip';
+    }
+    try {
       var meta = document.querySelector('meta[name="viewport" i]');
       if (!meta) {
         meta = document.createElement('meta');
         meta.setAttribute('name', 'viewport');
+        meta.setAttribute('data-xwake-viewport', '1');
         host.appendChild(meta);
       }
       if (meta.getAttribute('content') !== CONTENT) meta.setAttribute('content', CONTENT);
-      return true;
-    } catch (e) { return false; }
+      return 'fixed';
+    } catch (e) { return 'skip'; }
   }
-  if (apply()) return 'ok';
+
+  /* First attempt is synchronous; onPageStarted often fires before <head> exists, so poll a
+     little rather than reporting a wrong verdict for a page that has not finished parsing. */
+  var verdict = apply();
+  if (verdict === 'fixed') return verdict;
   var tries = 0;
   var timer = setInterval(function() {
     tries += 1;
-    if (apply() || tries > 40) clearInterval(timer);
+    if (apply() === 'fixed') { clearInterval(timer); return; }
+    if (tries > 40) clearInterval(timer);
   }, 50);
-  return 'deferred';
+  return verdict;
 })()
 """.trimIndent().replace("@@W@@", DESKTOP_VIEWPORT_WIDTH.toString())
 
