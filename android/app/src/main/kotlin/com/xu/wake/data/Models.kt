@@ -9,18 +9,51 @@ data class PeriodTime(val period: Int, val startMinutes: Int, val endMinutes: In
     }
 }
 
-fun defaultDayPeriods(): List<PeriodTime> = listOf(480, 535, 590, 645, 700, 810, 865, 920, 975, 1030, 1100, 1155, 1210, 1245)
-    .mapIndexed { i, start -> PeriodTime(i + 1, start, if (i == 13) 1260 else start + if (i == 12) 30 else 45) }
+/**
+ * 默认作息：一天 20 节。
+ *
+ * 8:00 开始、每节 40 分钟、间隔 5 分钟，最后一节 22:55 结束。20 节必须挤进一天，
+ * 所以这是一套均匀的起始网格；真实作息在「设置 → 学期与课表 → 节次时间」里改。
+ */
+const val DEFAULT_PERIOD_COUNT = 20
+
+fun defaultDayPeriods(): List<PeriodTime> = resizePeriods(emptyList(), DEFAULT_PERIOD_COUNT)
+
+/**
+ * 把作息调整到 [count] 节。
+ *
+ * 减少时截断尾部；增加时沿用相邻两节的间隔继续外推，超出当天则拒绝——
+ * 静默产生 25:00 这种时间比报错更糟。
+ */
+fun resizePeriods(periods: List<PeriodTime>, count: Int): List<PeriodTime> {
+    require(count in 1..100) { "每日节数须在 1–100 之间" }
+    if (periods.isEmpty()) {
+        /* 起始网格：8:00 起、40 分钟一节、间隔 5 分钟。 */
+        return (0 until count).map { i ->
+            val start = 480 + i * 45
+            PeriodTime(i + 1, start, start + 40)
+        }
+    }
+    if (count <= periods.size) return periods.take(count)
+    val result = periods.toMutableList()
+    while (result.size < count) {
+        val last = result.last()
+        val stride = if (result.size >= 2) last.startMinutes - result[result.size - 2].startMinutes else 45
+        val start = last.startMinutes + stride.coerceAtLeast(1)
+        require(start + 40 <= 1440) { "加到 " + count + " 节会超出当天时间，请先调整前面的节次" }
+        result += PeriodTime(last.period + 1, start, start + 40)
+    }
+    return result
+}
 
                                                                                     
 data class AppSettings(
     val school: String = "",
-    val semester: String = "当前学期",
     val schoolUrl: String = "",
     val theme: String = "system",
     val navigationStyle: String = "default",
     val fontScale: Double = 1.0,
-    val density: Double = 1.0,
+    val density: Double = 0.85,
     val firstDay: Int = 1,
     val lastDay: Int = 7,
     val weekStart: Int = 1,
@@ -37,11 +70,13 @@ data class AppSettings(
     val motionSpeed: Double = 1.0,
     val reduceMotion: Boolean = false,
     val transitionStyle: String = "shared",
+    /** 滚动课表时自动隐藏顶栏、底栏与系统状态栏，把纵向空间让给课表。 */
+    val autoHideBars: Boolean = false,
 ) {
     init {
         require(firstDay in 1..7 && lastDay in firstDay..7 && weekStart in 1..7)
         require(weekCount in 1..60 && currentWeek in 1..weekCount)
-        require(fontScale.isFinite() && fontScale in .8..1.6 && density.isFinite() && density in .7..1.5)
+        require(fontScale.isFinite() && fontScale in .8..1.6 && density.isFinite() && density in .6..1.6)
         require(motionSpeed.isFinite() && motionSpeed in .5..2.0)
         require(transitionStyle in listOf("standard", "shared", "fade"))
         require(theme in listOf("system", "light", "dark"))
@@ -97,6 +132,11 @@ data class SchoolImport(
 fun adjustPeriods(periods: List<PeriodTime>, index: Int, start: Int, end: Int, cascade: Boolean = true): List<PeriodTime> {
     require(index in periods.indices)
     val delta = end - periods[index].endMinutes
+    /* 先判溢出再构造，否则 PeriodTime 会抛出难懂的「无效的节次时间」。一天 20 节时
+       余量本来就少，往后顺延很容易顶到午夜。 */
+    if (cascade && delta > 0) {
+        require(periods.last().endMinutes + delta <= 1440) { "顺延后最后一节会超出当天，请先缩短其它节次" }
+    }
     val result = periods.mapIndexed { i, p ->
         when {
             i == index -> p.copy(startMinutes = start, endMinutes = end)

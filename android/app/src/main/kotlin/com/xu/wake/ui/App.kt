@@ -58,6 +58,12 @@ fun XwakeApp() {
     val editing = data.courses.firstOrNull { it.id == editingId }
     var details by remember { mutableStateOf<CourseSession?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    /* 课表浏览到哪一周是临时状态：翻周不写回设置，设置里的「当前周」才是锚点。 */
+    var viewWeek by remember { mutableIntStateOf(1) }
+    var immersive by remember { mutableStateOf(false) }
+    /* 排课编辑模式：长按课表或从右上角菜单进入，顶栏出现「完成」。 */
+    var editMode by remember { mutableStateOf(false) }
+    val systemBars = rememberSystemBars()
     var highlightRequest by remember { mutableStateOf<String?>(null) }
     var locatedCourseId by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -131,6 +137,10 @@ fun XwakeApp() {
         val next = when(data.settings.theme) { "system" -> "dark"; "dark" -> "light"; else -> "system" }
         commit(data.copy(settings = data.settings.copy(theme = next)))
     }
+    LaunchedEffect(data.settings.currentWeek) { viewWeek = data.settings.currentWeek }
+    LaunchedEffect(page, tab) {
+        if (page != "home" || tab != 0) { immersive = false; systemBars(false) }
+    }
     BackHandler(page != "home" && !searchOpen) { page = "home" }
     XwakeTheme(data.settings.theme, data.settings.fontScale.toFloat(), data.settings.themePalette, data.settings.dynamicColor, data.settings.motionSpeed, data.settings.reduceMotion, data.settings.transitionStyle) {
         GlassHost {
@@ -139,7 +149,7 @@ fun XwakeApp() {
         Box(Modifier.fillMaxSize()) {
         if (ready) SharedTransitionLayout {
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
-            if (page == "home") Column(Modifier.navigationBarsPadding()) {
+            if (page == "home" && !(immersive && data.settings.autoHideBars)) Column(Modifier.navigationBarsPadding()) {
                 XwakeDock(
                     data.settings.navigationStyle, tab, { tab = it },
                     Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -166,7 +176,26 @@ fun XwakeApp() {
                         }
                         else -> Column(Modifier.fillMaxSize()) {
                             MotionContent("tab$tab", Modifier.weight(1f)) { target ->
-                                if(target == "tab0") Timetable(data, scheduleScroll, { w -> commit(data.copy(settings = data.settings.copy(currentWeek = w))) }, { details = it }, { editingId = null; page = "course" }, locatedCourseId)
+                                if(target == "tab0") Timetable(
+                                    data = data,
+                                    scroll = scheduleScroll,
+                                    viewWeek = viewWeek,
+                                    onViewWeek = { viewWeek = it },
+                                    onCourse = { details = it },
+                                    onAdd = { editingId = null; page = "course" },
+                                    locatedCourseId = locatedCourseId,
+                                    onImmersive = { hidden ->
+                                        immersive = hidden
+                                        systemBars(hidden && data.settings.autoHideBars)
+                                    },
+                                    onBrowser = { openBrowser() },
+                                    onImportFile = { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) },
+                                    onExportFile = { exportFile.launch("xwake-课表.json") },
+                                    onSearch = { searchOpen = true },
+                                    onEditSchedule = { editMode = true },
+                                    editMode = editMode,
+                                    onEditMode = { editMode = it },
+                                )
                                 else SettingsPage(data, settingsScroll, settingsRoute, highlightRequest, searchOpen, { settingsRoute = it }, { candidate -> commit(candidate) }, { editingId = null; page = "course" }, { page = "periods" }, {
                                     openBrowser()
                                 }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true })
@@ -190,7 +219,7 @@ fun XwakeApp() {
                 val target = data.courses.firstOrNull { it.id == id }
                 if (target != null) {
                     val week = target.weeks.firstOrNull() ?: data.settings.currentWeek
-                    if (week != data.settings.currentWeek) commit(data.copy(settings = data.settings.copy(currentWeek = week)))
+                    viewWeek = week
                     tab = 0
                     page = "home"
                     locatedCourseId = id
@@ -222,7 +251,11 @@ fun XwakeApp() {
             ModalBottomSheet(onDismissRequest = { details = null }) {
                 Column(Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(course.name, style = MaterialTheme.typography.headlineSmall)
-                    Text("教师：${course.teacher}\n地点：${course.location}\n${dayNames[course.weekday-1]} · 第 ${course.startPeriod}—${course.endPeriod} 节\n周次：${course.weeks.joinToString("、")}")
+                    val from = data.settings.periods.firstOrNull { it.period == course.startPeriod }?.startMinutes
+                    val to = data.settings.periods.firstOrNull { it.period == course.endPeriod }?.endMinutes
+                    /* 时间由作息设置换算：课程只存节次，时钟区间是派生值。 */
+                    val span = if (from != null && to != null && to > from) "\n时间：${clock(from)}—${clock(to)}" else ""
+                    Text("教师：${course.teacher}\n地点：${course.location}\n${dayNames[course.weekday-1]} · 第 ${course.startPeriod}—${course.endPeriod} 节$span\n周次：${course.weeks.joinToString("、")}")
                     Row { Button(onClick = { editingId = course.id; details = null; page = "course" }) { Text("编辑课程") }; TextButton(onClick = { confirmDelete = true }) { Text("删除课程") } }
                     Spacer(Modifier.height(20.dp))
                 }

@@ -9,11 +9,14 @@ class ModelsAndReminderTest {
     private fun settings() = AppSettings(start = LocalDate.of(2026, 2, 23), end = LocalDate.of(2026, 3, 8), weekCount = 2, reminders = true)
     private fun course(weeks: List<Int> = listOf(1, 2)) = CourseSession("id", "数学", 1, 1, 2, weeks)
 
-    @Test fun defaultPeriodsMatchFlutter() {
+    /** 默认作息改为一天 20 节：8:00 起、40 分钟一节、间隔 5 分钟。 */
+    @Test fun defaultPeriodsAreTwenty() {
         val periods = defaultDayPeriods()
-        assertEquals(14, periods.size)
+        assertEquals(20, periods.size)
         assertEquals(480, periods.first().startMinutes)
-        assertEquals(1260, periods.last().endMinutes)
+        assertEquals(520, periods.first().endMinutes)
+        assertEquals(480 + 19 * 45, periods.last().startMinutes)
+        assertEquals(480 + 19 * 45 + 40, periods.last().endMinutes)
     }
     @Test fun rejectsInvalidData() {
         assertThrows(IllegalArgumentException::class.java) { AppSettings(fontScale = Double.NaN) }
@@ -48,6 +51,12 @@ class ModelsAndReminderTest {
     }
     @Test fun cascadeRejectsOverlap() {
         assertThrows(IllegalArgumentException::class.java) { adjustPeriods(defaultDayPeriods(), 0, 480, 600, false) }
-        assertEquals(610, adjustPeriods(defaultDayPeriods(), 0, 480, 600)[1].startMinutes)
+        /* 默认第 1 节是 480–520，拉到 540 后 delta=20；第 2 节原为 525，顺延到 545。 */
+        assertEquals(545, adjustPeriods(defaultDayPeriods(), 0, 480, 540)[1].startMinutes)
+        /* 20 节已排到 22:55，再大幅顺延会越过午夜，应给出可读的拒绝理由。 */
+        val overflow = assertThrows(IllegalArgumentException::class.java) {
+            adjustPeriods(defaultDayPeriods(), 0, 480, 600)
+        }
+        assertTrue("溢出提示应说明原因", overflow.message?.contains("超出当天") == true)
     }
 }

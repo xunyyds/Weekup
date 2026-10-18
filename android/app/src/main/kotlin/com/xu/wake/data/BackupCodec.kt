@@ -12,10 +12,10 @@ object BackupCodec {
         data.validate()
         val s = data.settings
         val settings = JSONObject().apply {
-            put("school", s.school); put("semester", s.semester); put("schoolUrl", s.schoolUrl)
+            put("school", s.school); put("schoolUrl", s.schoolUrl)
             put("theme", s.theme); put("navigationStyle", s.navigationStyle)
             put("themePalette", s.themePalette); put("dynamicColor", s.dynamicColor)
-            put("motionSpeed", s.motionSpeed); put("reduceMotion", s.reduceMotion); put("transitionStyle", s.transitionStyle)
+            put("motionSpeed", s.motionSpeed); put("reduceMotion", s.reduceMotion); put("transitionStyle", s.transitionStyle); put("autoHideBars", s.autoHideBars)
             put("fontScale", s.fontScale); put("density", s.density)
             put("firstDay", s.firstDay); put("lastDay", s.lastDay); put("weekStart", s.weekStart)
             put("currentWeek", s.currentWeek); put("weekCount", s.weekCount)
@@ -48,9 +48,9 @@ object BackupCodec {
                 }
             }
             val s = AppSettings(
-                school = j.string("school", ""), semester = j.string("semester", "当前学期"), schoolUrl = j.string("schoolUrl", ""),
+                school = j.string("school", ""), schoolUrl = j.string("schoolUrl", ""),
                 theme = j.string("theme", "system"), navigationStyle = j.string("navigationStyle", "default").let { if (it in listOf("default", "floating", "liquid")) it else "default" },
-                fontScale = j.number("fontScale", 1.0), density = j.number("density", 1.0),
+                fontScale = j.number("fontScale", 1.0), density = j.number("density", 0.85),
                 firstDay = j.intOr("firstDay", 1), lastDay = j.intOr("lastDay", 7), weekStart = j.intOr("weekStart", 1),
                 currentWeek = j.intOr("currentWeek", 1), weekCount = j.intOr("weekCount", 20),
                 defaultColor = j.longOr("defaultColor", 0xffd9e9deL), reminderMinutes = j.intOr("reminderMinutes", 10),
@@ -61,6 +61,7 @@ object BackupCodec {
                 motionSpeed = j.number("motionSpeed", defaults.motionSpeed),
                 reduceMotion = if(j.has("reduceMotion")) (j.get("reduceMotion") as? Boolean ?: error("reduceMotion 必须为布尔值")) else false,
                 transitionStyle = j.string("transitionStyle", defaults.transitionStyle),
+            autoHideBars = if(j.has("autoHideBars")) (j.get("autoHideBars") as? Boolean ?: error("autoHideBars 必须为布尔值")) else false,
                 themePalette = j.string("themePalette", defaults.themePalette),
                 dynamicColor = if (j.has("dynamicColor")) (j.get("dynamicColor") as? Boolean ?: error("dynamicColor 必须为布尔值")) else defaults.dynamicColor,
             )

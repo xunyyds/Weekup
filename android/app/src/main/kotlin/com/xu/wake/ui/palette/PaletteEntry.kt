@@ -58,7 +58,6 @@ private val paletteSettings: List<SettingSeed> = listOf(
     SettingSeed("转场风格", "motion", "外观 · 动效设置", "动画 标准 共享轴 淡入淡出"),
     SettingSeed("学期与课表", "semester", "设置 · 学期与课表", "学校 日期 时间"),
     SettingSeed("学校名称", "semester", "学期与课表", "学校 导入"),
-    SettingSeed("当前学期", "semester", "学期与课表", "学期名称"),
     SettingSeed("学期日期", "calendar", "学期与课表 · 学期日期"),
     SettingSeed("学期开始", "calendar", "学期与课表 · 学期日期", "开学 日期"),
     SettingSeed("学期结束", "calendar", "学期与课表 · 学期日期", "放假 日期"),

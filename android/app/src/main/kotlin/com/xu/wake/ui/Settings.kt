@@ -64,6 +64,9 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     var colorOpen by rememberSaveable { mutableStateOf(false) }
     var fontDraft by remember(s.fontScale) { mutableFloatStateOf(s.fontScale.toFloat()) }
     var densityDraft by remember(s.density) { mutableFloatStateOf(s.density.toFloat()) }
+    var periodDialog by remember { mutableStateOf(false) }
+    var periodDraft by remember { mutableIntStateOf(s.periods.size) }
+    var periodError by remember { mutableStateOf<String?>(null) }
     var motionDraft by remember(s.motionSpeed) { mutableFloatStateOf(s.motionSpeed.toFloat()) }
     var highlighted by rememberSaveable { mutableStateOf<String?>(null) }
     val appBarState = rememberTopAppBarState()
@@ -107,14 +110,11 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
         topBar={
             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).then(if(atRoot) Modifier.navigationBarsPadding() else Modifier)) {
                 if(atRoot) {
-                    LargeTopAppBar(
-                        title={ Text("设置") },
-                        windowInsets=WindowInsets(0,0,0,0),
-                        colors=TopAppBarDefaults.largeTopAppBarColors(
-                            containerColor=MaterialTheme.colorScheme.background,
-                            scrolledContainerColor=MaterialTheme.colorScheme.background,
-                        ),
-                        scrollBehavior=scrollBehavior,
+                    /* 展开高度从 152dp 收到 58dp，并自带状态栏内边距——此前 windowInsets 被清零，
+                       标题直接画到状态栏底下。 */
+                    XwakeTopBar(
+                        title = "设置",
+                        collapseFraction = scrollBehavior.state.collapsedFraction,
                     )
                     XwakeSearchPill(
                         collapsed=!searchExpanded,
@@ -129,7 +129,6 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                                 XwakeGlyph(XwakeGlyphKind.Back, MaterialTheme.colorScheme.onSurface)
                             }
                         },
-                        windowInsets=WindowInsets(0,0,0,0),
                         colors=TopAppBarDefaults.topAppBarColors(
                             containerColor=MaterialTheme.colorScheme.background,
                             scrolledContainerColor=MaterialTheme.colorScheme.background,
@@ -184,7 +183,27 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                     }
                     SettingsTarget("课表密度") {
                         Text("课表密度 · ${(densityDraft*100).toInt()}%",Modifier.padding(18.dp))
-                        Slider(densityDraft,{densityDraft=it},onValueChangeFinished={update { s.copy(density=densityDraft.toDouble()) }},valueRange=.7f..1.5f,steps=7,modifier=Modifier.padding(horizontal=18.dp))
+                        Slider(densityDraft,{densityDraft=it},onValueChangeFinished={update { s.copy(density=densityDraft.toDouble()) }},valueRange=.6f..1.6f,steps=19,modifier=Modifier.padding(horizontal=18.dp))
+                        /* 阈值预设：拖动是连续值，预设给几个确定档位，省得反复微调。 */
+                        Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            listOf(.7f to "紧凑",.85f to "标准",1f to "宽松",1.2f to "大格").forEach { (preset,label) ->
+                                FilterChip(
+                                    selected = kotlin.math.abs(densityDraft-preset)<.02f,
+                                    onClick = { densityDraft=preset; update { s.copy(density=preset.toDouble()) } },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        Text("越小一屏放下越多；行高与格子同步收缩。课表上双指捏合也能直接缩放。",Modifier.padding(horizontal=18.dp).padding(top=6.dp,bottom=14.dp),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    SettingsTarget("自动隐藏栏") {
+                        Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("滚动时自动隐藏")
+                                Text("向下滚动课表时收起顶栏、底栏与状态栏，向上滚动恢复",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(s.autoHideBars,{update { s.copy(autoHideBars=it) }})
+                        }
                     }
                 }
                 Route.Motion -> Section("动效设置") {
@@ -205,10 +224,47 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                 }
                 Route.Semester -> Section("学期与课表") {
                     SettingsItem("学校名称",s.school.ifBlank { "导入时自动识别，失败后再填写" }) { text("学校名称",s.school) { update { s.copy(school=it.trim()) } } }
-                    SettingsItem("当前学期",s.semester) { text("当前学期",s.semester) { update { s.copy(semester=it.trim()) } } }
                     SettingsItem("学期日期","${s.start} — ${s.end}") { onRoute(Route.Calendar.key) }
                     SettingsItem("周次与星期","第 ${s.currentWeek} 周 / 共 ${s.weekCount} 周") { onRoute(Route.Week.key) }
+                    SettingsItem("每日节数","${s.periods.size} 节") {
+                        periodDraft = s.periods.size
+                        periodError = null
+                        periodDialog = true
+                    }
                     SettingsItem("节次时间","已配置 ${s.periods.size} 节") { onPeriods() }
+                    if (periodDialog) AlertDialog(
+                        onDismissRequest = { periodDialog = false },
+                        title = { Text("每日节数") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("课表左侧的节次数量。增加会沿用现有间隔继续外推，减少会截掉末尾。")
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    FilledTonalButton(onClick = { if (periodDraft > 1) periodDraft-- }) { Text("−") }
+                                    Text(periodDraft.toString(), style = MaterialTheme.typography.titleLarge)
+                                    FilledTonalButton(onClick = { if (periodDraft < 100) periodDraft++ }) { Text("＋") }
+                                }
+                                periodError?.let {
+                                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                /* 有课程占用的节次不能减掉，否则课表的节次引用会失效。 */
+                                val maxUsed = data.courses.maxOfOrNull { it.endPeriod } ?: 0
+                                if (periodDraft < maxUsed) {
+                                    periodError = "第 " + maxUsed + " 节已有课程，不能减到 " + periodDraft + " 节"
+                                } else {
+                                    try {
+                                        val next = resizePeriods(s.periods, periodDraft)
+                                        update { s.copy(periods = next) }
+                                        periodDialog = false
+                                    } catch (e: Exception) { periodError = e.message ?: "无法应用" }
+                                }
+                            }) { Text("应用") }
+                        },
+                        dismissButton = { TextButton(onClick = { periodDialog = false }) { Text("取消") } },
+                    )
                 }
                 Route.Calendar -> Section("学期日期") { SettingsItem("学期开始",s.start.toString()) { date(true) }; SettingsItem("学期结束",s.end.toString()) { date(false) } }
                 Route.Week -> Section("周次与星期") {
