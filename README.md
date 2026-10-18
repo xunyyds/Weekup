@@ -72,6 +72,8 @@ core/          concurrent/XwakeExecutors、platform/（APK 分享、链接、元
 
 **课表投影**：`projectWeek()` 是纯函数，`(courses, week, firstDay, lastDay, weekStart, periods) → WeekProjection`。Composable 里用 `remember` 以这 6 个输入为 key 缓存；颜色与重叠布局（lane）一并预计算。`LocalDate.now()` 的“今天”高亮留在组合内实时求值，不进缓存，否则跨天不刷新。
 
+**表格导入**：`.xlsx` 本质是 zip + XML（`xl/worksheets/*.xml` 与 `xl/sharedStrings.xml`），用 JDK 自带的 `ZipInputStream` 与 SAX 解析，不引入 POI。`XlsxTimetable` 把网格映射成课程，星期/节次/周次判定与网页导入共用同一套规则。
+
 **教务导入**：WebView 走原生网络栈，不拦截、不重放请求。页面加载后通过 `evaluateJavascript` 提取课表：脚本递归遍历同源 iframe 收集 `table`，剔除脚本/表单/媒体节点后交给 Jsoup。`SchoolParser` 按“星期表头 + 节次行 + 周次表达式”三重结构校验，任何一步不成立即拒绝导入，宁可失败也不写脏数据。
 
 **并发**：`XwakeExecutors` 提供两个池——`io`（阻塞 IO，核心数×2+2，有界队列 + CallerRuns）与 `compute`（CPU 密集，核心数封顶 6）。提醒排期刻意保持单线程：`sync()` 先撤销全部闹钟再重设，并发会交出错乱的闹期。

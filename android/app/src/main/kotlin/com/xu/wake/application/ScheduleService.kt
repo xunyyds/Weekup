@@ -34,6 +34,20 @@ class ScheduleService(context:Context) {
         } ?: error("无法读取文件")
         BackupCodec.decode(text)
     }
+    /**
+     * 按文件后缀选择读取方式：.xlsx 走表格解析，其余仍按 JSON 备份处理。
+     *
+     * 表格导入只产出课程与节次，其余设置沿用当前数据，由调用方合并。
+     */
+    suspend fun readImport(uri: Uri): Pair<AppData?, SchoolImport?> = withContext(Dispatchers.IO) {
+        val name = uri.lastPathSegment.orEmpty().lowercase()
+        val mime = app.contentResolver.getType(uri).orEmpty().lowercase()
+        val isXlsx = name.endsWith(".xlsx") || mime.contains("spreadsheetml")
+        if (!isXlsx) return@withContext readBackup(uri) to null
+        val stream = app.contentResolver.openInputStream(uri) ?: error("无法读取文件")
+        val grid = stream.use { XlsxReader.read(it) }
+        null to XlsxTimetable.parse(grid)
+    }
     suspend fun export(uri:Uri,data:AppData)=withContext(Dispatchers.IO) {
         val bytes=BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
         app.contentResolver.openOutputStream(uri,"wt")?.use { it.write(bytes) } ?: error("无法写入文件")

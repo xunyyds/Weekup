@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.xu.wake.data.*
+import com.xu.wake.domain.ScheduleActions
 import com.xu.wake.ui.glass.GlassHost
 import com.xu.wake.ui.glass.glassSource
 import com.xu.wake.ui.palette.PaletteActions
@@ -85,7 +86,15 @@ fun XwakeApp() {
         if (uri != null && !busy) scope.launch {
             busy = true
             try {
-                val candidate = service.readBackup(uri)
+                /* .xlsx 走表格导入，其余按 JSON 备份处理。 */
+                val (backup, sheet) = service.readImport(uri)
+                if (sheet != null) {
+                    commit(ScheduleActions.importSchool(data, sheet))
+                    message("已从表格导入 ${sheet.courses.size} 门课程")
+                    busy = false
+                    return@launch
+                }
+                val candidate = backup ?: error("无法读取文件")
                 if (startupError != null) {
                     val result = service.save(candidate,recovery=true)
                     data = result.data
@@ -160,7 +169,7 @@ fun XwakeApp() {
                                 if(target == "tab0") Timetable(data, scheduleScroll, { w -> commit(data.copy(settings = data.settings.copy(currentWeek = w))) }, { details = it }, { editingId = null; page = "course" }, locatedCourseId)
                                 else SettingsPage(data, settingsScroll, settingsRoute, highlightRequest, searchOpen, { settingsRoute = it }, { candidate -> commit(candidate) }, { editingId = null; page = "course" }, { page = "periods" }, {
                                     openBrowser()
-                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true })
+                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true })
                             }
                         }
                     }
@@ -200,7 +209,7 @@ fun XwakeApp() {
                     PaletteActions.NEW_COURSE -> { editingId = null; page = "course" }
                     PaletteActions.EDIT_PERIODS -> page = "periods"
                     PaletteActions.BROWSER_IMPORT -> openBrowser()
-                    PaletteActions.IMPORT_FILE -> importFile.launch(arrayOf("application/json","text/plain","application/octet-stream"))
+                    PaletteActions.IMPORT_FILE -> importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     PaletteActions.EXPORT_FILE -> exportFile.launch("xwake-课表.json")
                     PaletteActions.TOGGLE_THEME -> toggleTheme()
                     PaletteActions.OPEN_SETTINGS -> { tab = 1; page = "home" }
