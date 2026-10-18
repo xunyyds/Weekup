@@ -535,7 +535,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                     }
                     Text(imported.weekCount?.let { "学期共 $it 周" } ?: "未识别总周数，不会凭空生成学期数据。")
                     Text(imported.currentWeek?.let { "当前第 $it 周" } ?: "未识别当前周，请核对本地设置。")
-                    Text(if (imported.periods.isEmpty()) "未识别作息，请保留并核对本地时间。" else "识别到 ${imported.periods.size} 节作息时间。")
+                    Text(
+                        if (imported.periods.isEmpty()) "未识别作息，请保留并核对本地时间。"
+                        else "识别到 " + imported.periods.size + " 节作息：" +
+                            imported.periods.joinToString("、") { clock(it.startMinutes) + "–" + clock(it.endMinutes) }
+                    )
                     imported.courses.forEach { course ->
                         Text("${course.name} · 星期${"一二三四五六日"[course.weekday - 1]} · ${course.startPeriod}–${course.endPeriod}节\n周次：${course.weeks.joinToString()}\n教师：${course.teacher.ifBlank { "未识别" }}；地点：${course.location.ifBlank { "未识别" }}", style = MaterialTheme.typography.bodySmall)
                     }
@@ -753,7 +757,7 @@ private val VH_HEIGHT_REPAIR_SCRIPT = """
       if (!H) return false;
       var host = document.head || document.documentElement;
       if (!host) return false;
-      /* Only intervene where a vh-sized container is actually present. */
+      
       var shell = document.querySelector('.edu-container, .edu-container-new, [class*="edu-container"]');
       if (!shell) return true;
       var px = H + 'px';
@@ -796,14 +800,7 @@ private fun needsOverviewScale(url: String): Boolean = runCatching {
 
 private val DESKTOP_VIEWPORT_SCRIPT = """
 (function() {
-  /*
-   * Reports whether the current page is a fixed-width sign-on canvas, and widens its viewport
-   * if so.
-   *
-   * Returns 'fixed' for a fixed-width page, 'skip' for an ordinary one. The caller uses that
-   * verdict to decide whether overview scaling should be on: leaving it on for ordinary pages
-   * squeezed the post-sign-on screens into a narrow strip.
-   */
+  
   var CONTENT = 'width=@@W@@';
 
   function isFixed() {
@@ -823,7 +820,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
     var host = document.head || document.documentElement;
     if (!host) return 'skip';
     if (!isFixed()) {
-      /* Ordinary page: remove any viewport we injected on a previous navigation. */
+      
       var mine = document.querySelector('meta[data-xwake-viewport]');
       if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
       return 'skip';
@@ -841,8 +838,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
     } catch (e) { return 'skip'; }
   }
 
-  /* First attempt is synchronous; onPageStarted often fires before <head> exists, so poll a
-     little rather than reporting a wrong verdict for a page that has not finished parsing. */
+  
   var verdict = apply();
   if (verdict === 'fixed') return verdict;
   var tries = 0;
@@ -857,19 +853,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
 
 private val CAS_FIT_SCRIPT = """
 (function() {
-  /*
-   * Layout correction for fixed-width single-sign-on pages.
-   *
-   * Such pages centre a fixed-width card on a 100vh canvas with overflow hidden. Scaled to a
-   * phone that leaves a large empty band under the card, so the card is put back into normal
-   * flow and the body sizes to its content.
-   *
-   * Detected by structure, never by hostname, so no particular deployment is baked in.
-   * Two rules this script must follow, both learned the hard way:
-   *   1. Never gate on getComputedStyle: this runs from onPageStarted, before the page's
-   *      stylesheets are parsed, so computed style still reports the defaults.
-   *   2. Never assume the card exists yet: watch for it briefly instead of giving up.
-   */
+  
   var CSS = ''
     + 'html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;'
     + '  overflow-y:auto!important;}'
@@ -930,7 +914,6 @@ private val TABLE_EXTRACTION = """
   function escape(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function visible(e) {
     for (var n = e; n && n.nodeType === 1; n = n.parentElement) {
-      /* An element pulled out of an iframe needs that frame's window, not the top one. */
       var w = (n.ownerDocument && n.ownerDocument.defaultView) || window;
       var s = w.getComputedStyle(n);
       if (n.hidden || n.getAttribute('aria-hidden') === 'true' || s.display === 'none' || s.visibility === 'hidden' || s.visibility === 'collapse' || s.opacity === '0') return false;
@@ -959,9 +942,6 @@ private val TABLE_EXTRACTION = """
     var key = (e.getAttribute('name') || e.getAttribute('property') || '').toLowerCase();
     if (['school','school-name','school_name','university','og:site_name'].indexOf(key) >= 0) html += '<meta name="' + escape(key) + '" content="' + escape((e.getAttribute('content') || '').slice(0, 512)) + '">';
   });
-  /* The timetable usually lives in a nested iframe (e.g. a shell page hosting a content
-     frame), so the top document frequently has zero tables. Collect from this document AND
-     every same-origin frame, otherwise the extractor reports "no table found" on a good page. */
   function collectTables(doc, acc) {
     try {
       Array.from(doc.querySelectorAll('table')).forEach(function(t) { acc.push(t) });
@@ -977,8 +957,6 @@ private val TABLE_EXTRACTION = """
     return !(t.parentElement && t.parentElement.closest('table')) && !t.closest('form') && /星期|周[一二三四五六日天]/.test(clean(t).textContent || '');
   });
   for (var i = 0; i < tables.length; i++) {
-    /* kbcontent1 is a hidden duplicate of the same slot (site keeps several content variants per
-       cell). Drop it before serialising so the parser cannot read the same course twice. */
     Array.from(tables[i].querySelectorAll('[class*="kbcontent1"]')).forEach(function(n) {
       if (n.parentNode) n.parentNode.removeChild(n);
     });

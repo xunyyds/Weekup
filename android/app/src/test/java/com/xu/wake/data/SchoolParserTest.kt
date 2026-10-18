@@ -8,7 +8,7 @@ class SchoolParserTest {
         <p>总周数：6 当前周：2</p><table>
         <tr><th>节次</th><th>星期一</th><th>星期二</th></tr>
         <tr><td>第1节 08:00-08:45</td><td $span><div class="kbcontent">数学<br>$week<br><span title="教师">张老师</span><br><span title="教室">A101</span></div></td><td></td></tr></table>
-    """.trimIndent()
+""".trimIndent()
     @Test fun parsesOddWeeksAndMetadata() {
         val result = SchoolParser.parse(html())
         assertEquals(listOf(1, 3, 5), result.courses.single().weeks)
@@ -61,7 +61,7 @@ class SchoolParserTest {
             <tr><td>第1节 08:00-08:45</td><td>
               <div class="kbcontent">高等数学I<br>莫从庆<br>5-16(周)[01-02节]<br>图书馆304<br>----------------------<br>大学英语<br>李梅<br>3-8(周)[01-02节]<br>教1-201</div>
             </td><td></td></tr></table>
-        """.trimIndent()
+""".trimIndent()
         val courses = SchoolParser.parse(source).courses
         assertEquals(2, courses.size)
         assertEquals(setOf("高等数学I", "大学英语"), courses.map { it.name }.toSet())
@@ -81,7 +81,7 @@ class SchoolParserTest {
             <tr><td>第1节 08:00-08:45</td><td><div class="kbcontent">数学<br>1-6周(单)</div></td><td></td></tr>
             <tr><th>备注:</th><td colspan="2">军事技能 3-4周;军事理论 2-19周;劳动实践 2-19周;</td></tr>
             </table>
-        """.trimIndent()
+""".trimIndent()
         val courses = SchoolParser.parse(source).courses
         assertEquals(1, courses.size)
         assertEquals("数学", courses.single().name)
@@ -92,7 +92,7 @@ class SchoolParserTest {
             <table>
             <tr><th>节次</th><th>星期一</th><th>星期二</th></tr>
             <tr><td>第1节 08:00-08:45</td><td><div class="kbcontent">数学<br>1-6周(单)</div></td><td><div class="kbcontent">没有周次的文字</div></td></tr></table>
-        """.trimIndent()
+""".trimIndent()
         val courses = SchoolParser.parse(source).courses
         assertEquals(1, courses.size)
         assertEquals("数学", courses.single().name)

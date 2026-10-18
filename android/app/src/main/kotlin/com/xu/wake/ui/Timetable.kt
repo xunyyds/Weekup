@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -147,6 +148,9 @@ fun Timetable(
     onSearch: () -> Unit = {},
     onEditSchedule: () -> Unit = {},
     editMode: Boolean = false,
+    onMoveCourse: (String, Int, Int) -> Unit = { _, _, _ -> },
+    onMoveDay: (Int, Int) -> Unit = { _, _ -> },
+    onMoveRow: (Int, Int) -> Unit = { _, _ -> },
     onEditMode: (Boolean) -> Unit = {},
 ) {
     val s = data.settings
@@ -162,6 +166,15 @@ fun Timetable(
     var viewportH by remember { mutableIntStateOf(0) }
     var immersive by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf<PlacedCourse?>(null) }
+    var dragAt by remember { mutableStateOf(Offset.Zero) }
+    var dragSpot by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var columnFrom by remember { mutableIntStateOf(0) }
+    var columnTo by remember { mutableIntStateOf(0) }
+    var rowFrom by remember { mutableIntStateOf(0) }
+    var rowTo by remember { mutableIntStateOf(0) }
+    var colDrag by remember { mutableFloatStateOf(0f) }
+    var rowDrag by remember { mutableFloatStateOf(0f) }
 
     val gutterPx = with(density) { gutterWidth.toPx() }
     val headerPx = with(density) { dayHeaderHeight.toPx() }
@@ -218,6 +231,13 @@ fun Timetable(
     }
 
     BackHandler(enabled = editMode) { onEditMode(false) }
+    LaunchedEffect(editMode) { if (!editMode) { dragging = null; dragSpot = null; columnFrom = 0; rowFrom = 0 } }
+
+    fun spotAt(x: Float, y: Float): Pair<Int, Int> {
+        val col = ((x - gutterPx + offsetX) / cellW).toInt().coerceIn(0, dayCount - 1)
+        val row = ((y - headerPx + offsetY) / cellH).toInt().coerceIn(0, periodCount - 1)
+        return projection.days[col] to row
+    }
 
     val dragThreshold = with(density) { 52.dp.toPx() }
 
@@ -329,7 +349,8 @@ fun Timetable(
                                     zoom = next
                                     offsetX = (atContent * cw - anchorX)
                                         .coerceIn(0f, (cw * dayCount - availW).coerceAtLeast(0f))
-                                } else if (panChange != Offset.Zero) {
+                                /* 正在拖某一门课时不要同时平移表格：两者叠加会让落点算回原格。 */
+                                } else if (panChange != Offset.Zero && dragging == null) {
                                     val nx = offsetX - panChange.x
                                     val ny = offsetY - panChange.y
                                     if (maxX <= 0f) edgePull += -panChange.x else {
@@ -341,7 +362,6 @@ fun Timetable(
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
-
 
                             if (!editMode && abs(edgePull) > dragThreshold) {
                                 offsetX = 0f
@@ -365,9 +385,35 @@ fun Timetable(
                         Spacer(Modifier.height(dayHeaderHeight))
 
                         Column(Modifier.graphicsLayer { translationY = -offsetY }) {
-                            s.periods.forEach { pr ->
+                            s.periods.forEachIndexed { rowIndex, pr ->
+                                val marked = editMode && rowFrom != 0 && (rowTo == rowIndex || rowFrom - 1 == rowIndex)
                                 Box(
-                                    Modifier.height(with(density) { cellH.toDp() }).fillMaxWidth(),
+                                    Modifier.height(with(density) { cellH.toDp() }).fillMaxWidth()
+                                        .then(
+                                            if (marked) Modifier.background(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = .18f),
+                                                gridCellShape,
+                                            ) else Modifier
+                                        )
+                                        .then(
+                                            if (!editMode) Modifier else Modifier.pointerInput(rowIndex, cellH) {
+                                                detectDragGestures(
+                                                    onDragStart = { rowFrom = rowIndex + 1; rowTo = rowIndex; rowDrag = 0f },
+                                                    onDrag = { change, delta ->
+                                                        change.consume()
+                                                        rowDrag += delta.y
+                                                        rowTo = (rowIndex + (rowDrag / cellH).roundToInt())
+                                                            .coerceIn(0, periodCount - 1)
+                                                    },
+                                                    onDragEnd = {
+                                                        val from = rowFrom - 1
+                                                        if (from != rowTo) onMoveRow(s.periods[from].period, s.periods[rowTo].period)
+                                                        rowFrom = 0
+                                                    },
+                                                    onDragCancel = { rowFrom = 0 },
+                                                )
+                                            }
+                                        ),
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -402,11 +448,37 @@ fun Timetable(
                     Column(Modifier.weight(1f)) {
 
                         Row(Modifier.graphicsLayer { translationX = -offsetX }) {
-                            projection.days.forEach { day ->
+                            projection.days.forEachIndexed { dayIndex, day ->
                                 val date = WeekDates.on(s.start, week, day)
                                 val isToday = date == today
+                                val marked = editMode && (columnTo == dayIndex || (columnFrom != 0 && columnFrom == dayIndex))
                                 Box(
-                                    Modifier.width(with(density) { cellW.toDp() }).height(dayHeaderHeight),
+                                    Modifier.width(with(density) { cellW.toDp() }).height(dayHeaderHeight)
+                                        .then(
+                                            if (marked) Modifier.background(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = .18f),
+                                                gridCellShape,
+                                            ) else Modifier
+                                        )
+                                        .then(
+                                            if (!editMode) Modifier else Modifier.pointerInput(dayIndex, cellW) {
+                                                detectDragGestures(
+                                                    onDragStart = { columnFrom = dayIndex + 1; columnTo = dayIndex; colDrag = 0f },
+                                                    onDrag = { change, delta ->
+                                                        change.consume()
+                                                        colDrag += delta.x
+                                                        columnTo = (dayIndex + (colDrag / cellW).roundToInt())
+                                                            .coerceIn(0, dayCount - 1)
+                                                    },
+                                                    onDragEnd = {
+                                                        val from = columnFrom - 1
+                                                        if (from != columnTo) onMoveDay(projection.days[from], projection.days[columnTo])
+                                                        columnFrom = 0
+                                                    },
+                                                    onDragCancel = { columnFrom = 0 },
+                                                )
+                                            }
+                                        ),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -430,7 +502,7 @@ fun Timetable(
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
                             Row(Modifier.graphicsLayer { translationX = -offsetX }) {
-                                projection.days.forEach { day ->
+                                projection.days.forEachIndexed { dayIndex, day ->
                                     Box(
                                         Modifier
                                             .width(with(density) { cellW.toDp() })
@@ -463,6 +535,34 @@ fun Timetable(
                                                     if (located) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, gridCellShape)
                                                     else Modifier
                                                 )
+                                                .then(
+                                                    if (!editMode) Modifier else Modifier.pointerInput(course.id, cellW) {
+                                                        detectDragGestures(
+                                                            onDragStart = { local ->
+                                                                dragging = pc
+                                                                dragAt = Offset(
+                                                                    gutterPx + dayIndex * cellW - offsetX + local.x,
+                                                                    headerPx + pc.startIndex * cellH - offsetY + local.y,
+                                                                )
+                                                                dragSpot = day to pc.startIndex
+                                                            },
+                                                            onDrag = { change, delta ->
+                                                                change.consume()
+                                                                dragAt += delta
+                                                                dragSpot = spotAt(dragAt.x, dragAt.y)
+                                                            },
+                                                            onDragEnd = {
+                                                                val spot = dragSpot
+                                                                val period = spot?.let { s.periods.getOrNull(it.second)?.period }
+                                                                if (spot != null && period != null &&
+                                                                    (spot.first != course.weekday || period != course.startPeriod)
+                                                                ) onMoveCourse(course.id, spot.first, period)
+                                                                dragging = null; dragSpot = null
+                                                            },
+                                                            onDragCancel = { dragging = null; dragSpot = null },
+                                                        )
+                                                    }
+                                                )
 
                                             val cardDp = with(density) { cellW.toDp().value }
                                             val cardSize = (cardDp / 4.2f).coerceIn(8f, 15f).sp
@@ -494,6 +594,32 @@ fun Timetable(
                             }
                         }
                     }
+                }
+
+                dragging?.let { ghost ->
+                    val ghostStyle = styles[ghost.course.id]
+                        ?: courseStyle(ghost.course, data.colors, s.defaultColor, surface)
+                    Box(
+                        Modifier
+                            .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
+                            .width(with(density) { cellW.toDp() })
+                            .height(with(density) { (cellH * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
+                            .padding(1.dp)
+                            .background(ghostStyle.background.copy(alpha = .92f), gridCellShape),
+                    )
+                }
+                dragSpot?.let { spot ->
+                    val spotIndex = projection.days.indexOf(spot.first)
+                    if (spotIndex >= 0) Box(
+                        Modifier
+                            .offset { IntOffset(
+                                (gutterPx + spotIndex * cellW - offsetX).roundToInt(),
+                                (headerPx + spot.second * cellH - offsetY).roundToInt(),
+                            ) }
+                            .width(with(density) { cellW.toDp() })
+                            .height(with(density) { cellH.toDp() })
+                            .border(2.dp, MaterialTheme.colorScheme.primary, gridCellShape),
+                    )
                 }
             }
         }

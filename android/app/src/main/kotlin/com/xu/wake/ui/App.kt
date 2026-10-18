@@ -83,6 +83,24 @@ fun XwakeApp() {
             finally { busy = false }
         }
     }
+
+    var pendingMove by remember { mutableStateOf<Triple<String, String, Pair<Int, Int>>?>(null) }
+
+
+    var offerPeriodEdit by remember { mutableStateOf(false) }
+    fun applyMove(move: Triple<String, String, Pair<Int, Int>>, mode: ScheduleActions.MoveMode) {
+        val (kind, id, ends) = move
+        val next = when (kind) {
+            "course" -> ScheduleActions.moveCourse(data, id, ends.first, ends.second, mode)
+            "day" -> ScheduleActions.moveDay(data, ends.first, ends.second, mode)
+            else -> ScheduleActions.moveRow(data, ends.first, ends.second, mode)
+        }
+        commit(next)
+    }
+    fun requestMove(kind: String, id: String, ends: Pair<Int, Int>, conflict: Boolean) {
+        val move = Triple(kind, id, ends)
+        if (conflict) pendingMove = move else applyMove(move, ScheduleActions.MoveMode.SWAP)
+    }
     LaunchedEffect(Unit) {
         try {
             data = service.load()
@@ -178,7 +196,10 @@ fun XwakeApp() {
                         }
                         "browser" -> BrowserImport(data.settings.schoolUrl, { page = "home" }, existingSchool = data.settings.school) { imported ->
                             try {
-                                commit(com.xu.wake.domain.ScheduleActions.importSchool(data,imported)) { page = "home" }
+                                val next = com.xu.wake.domain.ScheduleActions.importSchool(data, imported)
+                                val changed = next.settings.periods != data.settings.periods
+                                commit(next) { page = "home" }
+                                if (changed && imported.periods.isNotEmpty()) offerPeriodEdit = true
                             } catch(e: Exception) { message("导入参数不一致：${e.message}") }
                         }
                         else -> Column(Modifier.fillMaxSize()) {
@@ -200,6 +221,22 @@ fun XwakeApp() {
                                     onExportFile = { exportFile.launch("xwake-课表.json") },
                                     onSearch = { searchOpen = true },
                                     onEditSchedule = { editMode = true },
+                                    onMoveCourse = { id, day, period ->
+                                        val course = data.courses.firstOrNull { it.id == id }
+                                        if (course != null) {
+                                            val span = course.endPeriod - course.startPeriod
+                                            requestMove(
+                                                "course", id, day to period,
+                                                ScheduleActions.hasConflict(data, day, period, period + span),
+                                            )
+                                        }
+                                    },
+                                    onMoveDay = { from, to ->
+                                        requestMove("day", "", from to to, ScheduleActions.hasDayConflict(data, to))
+                                    },
+                                    onMoveRow = { from, to ->
+                                        requestMove("row", "", from to to, ScheduleActions.hasRowConflict(data, to))
+                                    },
                                     editMode = editMode,
                                     onEditMode = { editMode = it },
                                 )
@@ -260,6 +297,33 @@ fun XwakeApp() {
                 }
             },
         )
+        }
+        if (offerPeriodEdit) AlertDialog(
+            onDismissRequest = { offerPeriodEdit = false },
+            title = { Text("作息时间与本地预设不同") },
+            text = { Text("已按导入的时间更新。要不要现在核对一遍？") },
+            confirmButton = { TextButton(onClick = { offerPeriodEdit = false; page = "periods" }) { Text("去编辑") } },
+            dismissButton = { TextButton(onClick = { offerPeriodEdit = false }) { Text("稍后") } },
+        )
+        pendingMove?.let { move ->
+            AlertDialog(
+                onDismissRequest = { pendingMove = null },
+                title = { Text("这个位置已经有课") },
+                text = { Text("替换：两门课互换位置。覆盖：原有的课被删掉。") },
+                confirmButton = {
+                    TextButton(onClick = { applyMove(move, ScheduleActions.MoveMode.SWAP); pendingMove = null }) {
+                        Text("替换")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { applyMove(move, ScheduleActions.MoveMode.OVERWRITE); pendingMove = null }) {
+                            Text("覆盖")
+                        }
+                        TextButton(onClick = { pendingMove = null }) { Text("取消") }
+                    }
+                },
+            )
         }
         details?.let { course ->
             var confirmDelete by remember { mutableStateOf(false) }

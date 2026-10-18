@@ -112,7 +112,7 @@ class SearchPipelinePerfTest {
             |  keystroke (build + query) %10.2f %10.2f %7.1fx
             |  2000x data-change rebuild %10.2f %10.2f %7.1fx
             |  results returned          %10d %10d
-        """.trimMargin().format(
+""".trimMargin().format(
             beforeQueryMs, afterQueryMs, beforeQueryMs / afterQueryMs.coerceAtLeast(0.001),
             beforeChangeMs, afterChangeMs, beforeChangeMs / afterChangeMs.coerceAtLeast(0.001),
             legacySink, newSink,
