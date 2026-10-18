@@ -146,9 +146,13 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     fun applyViewportScript(browser: WebView, desktop: Boolean) {
         val page = browser.url.orEmpty()
         if (!schoolWebUrl(page)) return
-        /* No viewport rewriting: a native browser leaves the page's own <meta viewport> alone, and
-           overriding it is what fought the layout. Only the CAS page gets a layout correction, and
-           that script no-ops on every other host. */
+        /* Desktop mode needs a desktop-sized layout viewport. These pages are fixed-width
+           canvases (a 624px card on 100vw/100vh with overflow hidden), so at phone width the
+           card overflows and gets clipped. A wide canvas plus overview scaling shows the whole
+           page.
+
+           Mobile mode leaves the page's own <meta viewport> alone. */
+        if (desktop) browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
         browser.evaluateJavascript(CAS_FIT_SCRIPT, null)
     }
     
@@ -730,6 +734,51 @@ private val PAGE_HEIGHT_SCRIPT = """
  *
  * Everything is scoped to these two hosts; other sites are untouched.
  */
+/*
+ * Layout width handed to fixed-width desktop pages.
+ *
+ * The pages this app targets centre a 624px card on a 100vw/100vh body with overflow hidden and
+ * ship no media queries. At phone width that card overflows and is clipped, so the page needs a
+ * desktop-ish canvas: 700 keeps the card at its natural size while still fitting the screen at
+ * roughly 56% scale (~350px on a 393dp phone). Wider canvases shrink the card into an unreadable
+ * sliver; narrower ones let it overflow again.
+ */
+private const val DESKTOP_VIEWPORT_WIDTH = 700
+
+/*
+ * Rewrites the page viewport to a desktop canvas width. Only applied in desktop mode; mobile mode
+ * keeps whatever the page declares.
+ *
+ * Runs from onPageStarted, so it must not depend on parsed stylesheets, and must tolerate the
+ * document not yet having a <head>: it retries briefly rather than giving up.
+ */
+private val DESKTOP_VIEWPORT_SCRIPT = """
+(function() {
+  var CONTENT = 'width=@@W@@';
+  function apply() {
+    try {
+      var host = document.head || document.documentElement;
+      if (!host) return false;
+      var meta = document.querySelector('meta[name="viewport" i]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'viewport');
+        host.appendChild(meta);
+      }
+      if (meta.getAttribute('content') !== CONTENT) meta.setAttribute('content', CONTENT);
+      return true;
+    } catch (e) { return false; }
+  }
+  if (apply()) return 'ok';
+  var tries = 0;
+  var timer = setInterval(function() {
+    tries += 1;
+    if (apply() || tries > 40) clearInterval(timer);
+  }, 50);
+  return 'deferred';
+})()
+""".trimIndent().replace("@@W@@", DESKTOP_VIEWPORT_WIDTH.toString())
+
 private val CAS_FIT_SCRIPT = """
 (function() {
   /*
