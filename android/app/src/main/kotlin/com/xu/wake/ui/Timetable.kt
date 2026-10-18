@@ -349,7 +349,6 @@ fun Timetable(
                                     zoom = next
                                     offsetX = (atContent * cw - anchorX)
                                         .coerceIn(0f, (cw * dayCount - availW).coerceAtLeast(0f))
-                                /* 正在拖某一门课时不要同时平移表格：两者叠加会让落点算回原格。 */
                                 } else if (panChange != Offset.Zero && dragging == null) {
                                     val nx = offsetX - panChange.x
                                     val ny = offsetY - panChange.y
