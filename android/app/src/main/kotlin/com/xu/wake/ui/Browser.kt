@@ -1006,6 +1006,11 @@ private val TABLE_EXTRACTION = """
     return !(t.parentElement && t.parentElement.closest('table')) && !t.closest('form') && /星期|周[一二三四五六日天]/.test(clean(t).textContent || '');
   });
   for (var i = 0; i < tables.length; i++) {
+    /* kbcontent1 is a hidden duplicate of the same slot (site keeps several content variants per
+       cell). Drop it before serialising so the parser cannot read the same course twice. */
+    Array.from(tables[i].querySelectorAll('[class*="kbcontent1"]')).forEach(function(n) {
+      if (n.parentNode) n.parentNode.removeChild(n);
+    });
     var table = clean(tables[i]);
     [table].concat(Array.from(table.querySelectorAll('*'))).forEach(function(e) {
       Array.from(e.attributes).forEach(function(a) {
