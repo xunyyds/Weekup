@@ -14,22 +14,7 @@ import org.junit.Test
 import java.io.File
 import java.util.Random
 
-/**
- * Measured performance baseline for the command-palette search pipeline.
- *
- * This is an audit artifact, not a feature test: it exists so a future change that quietly turns
- * an O(n) pass into an O(n^2) one, or that drops a `remember`, shows up as a number instead of a
- * feeling. Every case reproduces a hot path taken verbatim from production code, with the source
- * line quoted in the KDoc so the two can be diffed by eye.
- *
- * Numbers are JVM/host (JDK 21, Gradle unit test, no ART, no GPU). Treat them as *relative*
- * baselines for regression detection, not as device frame times.
- */
 class SearchPipelineBenchmarkTest {
-
-    // ---------------------------------------------------------------------------------------
-    // Fixture: a worst-plausible-real dataset.
-    // ---------------------------------------------------------------------------------------
 
     private val courseCount = 2000
     private val queryCount = 1000
@@ -55,10 +40,6 @@ class SearchPipelineBenchmarkTest {
         colors = (0 until courseCount).associate { "course-$it" to 0xffd9e9deL + it },
     )
 
-    /**
-     * 1000 distinct queries drawn from the same distribution a user produces: exact tokens,
-     * multi-token CN queries, index-ish strings, and pure misses.
-     */
     private fun queries(): List<String> {
         val rnd = Random(20260214L)
         val out = LinkedHashSet<String>()
@@ -85,16 +66,6 @@ class SearchPipelineBenchmarkTest {
         return out.toList()
     }
 
-    /**
-     * Verbatim copy of CommandPalette.kt:175-183.
-     *
-     *   val terms = remember(query) { searchTerms(query) }
-     *   val results = remember(entries, terms) { entries
-     *       .map { it to searchScore(SearchText(it.title, it.subtitle, it.keywords), terms) }
-     *       .filter { it.second >= 0 }
-     *       .sortedByDescending { it.second }
-     *       .map { it.first } }
-     */
     private fun runPipeline(entries: List<PaletteEntry>, query: String): List<PaletteEntry> {
         val terms = searchTerms(query)
         if (terms.isEmpty()) return emptyList()
@@ -104,10 +75,6 @@ class SearchPipelineBenchmarkTest {
             .sortedByDescending { it.second }
             .map { it.first }
     }
-
-    // ---------------------------------------------------------------------------------------
-    // The benchmark
-    // ---------------------------------------------------------------------------------------
 
     @Test
     fun baseline() {
@@ -122,7 +89,6 @@ class SearchPipelineBenchmarkTest {
         emit("fixture      = " + courseCount + " courses, " + queryCount + " distinct queries")
         emit("")
 
-        // --- AppData identity cost: what remember(data) pays on *every* recomposition ---------
         val data = dataset()
         val dataTwin = data.copy(settings = data.settings)
         var sink = 0
@@ -130,7 +96,6 @@ class SearchPipelineBenchmarkTest {
         val equalsNanos = bestOf(50) { sink += if (data == dataTwin) 1 else 0 }
         emit("AppData.equals(2000 courses)  : " + us(equalsNanos) + " us  <- paid per remember(data) key check")
 
-        // --- paletteEntries() rebuild ------------------------------------------------------------
         val entries = paletteEntries(data)
         repeat(20) { sink += paletteEntries(data).size }
         val entriesNanos = bestOf(20) { sink += paletteEntries(data).size }
@@ -139,13 +104,11 @@ class SearchPipelineBenchmarkTest {
         emit("  action seeds                : " + entries.count { it.id.startsWith("action:") })
         emit("")
 
-        // --- searchTerms(): one Regex compile per keystroke -------------------------------------
         val queries = queries()
         repeat(5000) { sink += searchTerms("主题 颜色").size }
         val termNanos = bestOf(2000) { sink += searchTerms("主题 颜色").size }
         emit("searchTerms(2 tokens)         : " + ns(termNanos) + " ns  <- Components.kt:509 compiles Regex(\\\\s+) every call")
 
-        // --- the full pipeline ------------------------------------------------------------------
         repeat(200) { sink += runPipeline(entries, queries[it % queries.size]).size }
 
         val perQuery = LongArray(queries.size)
@@ -171,13 +134,11 @@ class SearchPipelineBenchmarkTest {
         emit("per-query  : mean " + us(mean) + " us | p50 " + us(p50) + " | p95 " + us(p95) + " | p99 " + us(p99) + " | max " + us(max) + " us")
         emit("throughput : " + (1e9 / mean.toDouble()).toInt() + " queries/s")
 
-        // --- the O(n^2) course-grid projection (Timetable.kt:58-77) -----------------------------
         val gridNanos = bestOf(10) { sink += gridProject(data, 3).size }
         emit("")
         emit("## Timetable week projection (2000 courses, 7 days)")
         emit("one week   : " + us(gridNanos) + " us  <- unremembered, recomputed on every Timetable recomposition")
 
-        // --- remember(data) chain for the grid ---------------------------------------------------
         val weekNanos = bestOf(50) {
             for (w in 1..20) sink += data.forWeek(w).size
         }
@@ -185,9 +146,6 @@ class SearchPipelineBenchmarkTest {
 
         writeBaseline(report.toString())
 
-        // Loose regression gates. Deliberately generous: the point is to catch an order-of-
-        // magnitude regression (accidental O(n^2), dropped memo, per-item allocation in a loop),
-        // not to pin today's number to the microsecond on a shared CI box.
         assertTrue(
             "per-query mean regressed to " + us(mean) + " (gate: < 5000 us)",
             mean < 5_000_000L,
@@ -198,11 +156,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("everything optimised away?", sink != 0)
     }
 
-    /**
-     * Cost of the *proposed* pipeline: no intermediate Pair list, precomputed SearchText, and a
-     * single reusable comparator. Exists purely to size the headroom quoted in the audit — the
-     * production change is the implementer's call, not this file's.
-     */
     @Test
     fun proposedPipelineHeadroom() {
         val data = dataset()
@@ -255,11 +208,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /**
-     * Stage-by-stage attribution. Written because the assumed win (killing the Pair/SearchText
-     * allocation) measured at only 1.02x — the cost is elsewhere, and guessing which stage owns it
-     * is exactly the mistake this audit exists to prevent.
-     */
     @Test
     fun stageBreakdown() {
         val data = dataset()
@@ -312,11 +260,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /**
-     * The scan is 95% of the pipeline, so the primitive itself is what to fix. This isolates
-     * `String.indexOf(term, ignoreCase = true)` — the only non-trivial operation inside
-     * searchScore (Components.kt:520-523) — against its case-sensitive twin.
-     */
     @Test
     fun primitiveCost() {
         val data = dataset()
@@ -354,11 +297,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /**
-     * Validates the actual proposed fix: pre-lowercase the haystack (remembered per entry) and the
-     * terms (once per keystroke), then match with the case-sensitive, 23x-cheaper indexOf.
-     * Must produce identical hit counts to searchScore — a fast-but-wrong filter is not a fix.
-     */
     @Test
     fun lowercasePrecompute() {
         val data = dataset()
@@ -399,7 +337,6 @@ class SearchPipelineBenchmarkTest {
             return lower.indices.filter { fast(lower[it], terms) >= 0 }
         }
 
-        // Equivalence gate first — speed is worthless if the result set changes.
         var mismatches = 0
         for (q in queries) {
             if (runCurrent(q).toSet() != runFast(q).toSet()) mismatches++
@@ -429,11 +366,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /**
-     * Before/after against the shipped SearchIndex (ui/search/SearchIndex.kt), which landed while
-     * this audit was in flight. Same 1000 queries, same fixture; the legacy path is kept as the
-     * control so the delta is attributable to the refactor and not to machine noise.
-     */
     @Test
     fun searchIndexVersusLegacy() {
         val data = dataset()
@@ -447,7 +379,6 @@ class SearchPipelineBenchmarkTest {
             sink += index.search(queries[it % queries.size]).entries.size
         }
 
-        // Tie-break: both must return the same entries in the same order, or the speed is a bug.
         var orderMismatch = 0
         for (q in queries) {
             val legacy = runPipeline(entries, q).map { it.id }
@@ -479,7 +410,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /** Settings.kt:78-85 runs the same pipeline over only 37 catalog rows. */
     @Test
     fun settingsCatalogPipeline() {
         val catalog = (0 until 37).map { i -> SearchText("设置项" + i, "设置 · 分组" + (i % 6), "关键词" + i + " 主题 周次") }
@@ -507,10 +437,6 @@ class SearchPipelineBenchmarkTest {
         assertTrue("sink", sink != 0)
     }
 
-    /**
-     * Reproduces Timetable.kt:58-77 without any Compose: per-day filter + two indexOfFirst +
-     * a nested conflict scan + Comparator sorts.
-     */
     private fun gridProject(data: AppData, week: Int): List<CourseSession> {
         val s = data.settings
         val days = (s.firstDay..s.lastDay).sortedBy { (it - s.weekStart + 7) % 7 }
@@ -538,10 +464,6 @@ class SearchPipelineBenchmarkTest {
             f.writeText(text)
         }
     }
-
-    // ---------------------------------------------------------------------------------------
-    // helpers
-    // ---------------------------------------------------------------------------------------
 
     private inline fun bestOf(times: Int, block: () -> Unit): Long {
         var best = Long.MAX_VALUE

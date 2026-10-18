@@ -11,13 +11,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Cold and warm start of the real app process.
- *
- * This is the metric a user feels every morning when they open the timetable, and it is also the
- * one place where the splash → first-frame hand-off shows up. It needs a physical device: on an
- * emulator the numbers are meaningless, which is why nothing here is asserted against a threshold.
- */
 @LargeTest
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
@@ -25,7 +18,6 @@ class StartupBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** Process is killed before every iteration: measures class loading, splash and first frame. */
     @Test
     fun coldStartup() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -38,7 +30,6 @@ class StartupBenchmark {
         startActivityAndWait()
     }
 
-    /** Process stays alive, the activity is recreated: isolates activity + Compose composition cost. */
     @Test
     fun warmStartup() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -51,10 +42,6 @@ class StartupBenchmark {
         startActivityAndWait()
     }
 
-    /**
-     * Cold start with the timetable already populated, so the measured frame also pays for the
-     * course projection and the grid it draws. Requires the seeded state; see [Seeding].
-     */
     @Test
     fun coldStartupWithCourses() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,

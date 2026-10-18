@@ -34,11 +34,8 @@ class ScheduleService(context:Context) {
         } ?: error("无法读取文件")
         BackupCodec.decode(text)
     }
-    /**
-     * 按文件后缀选择读取方式：.xlsx 走表格解析，其余仍按 JSON 备份处理。
-     *
-     * 表格导入只产出课程与节次，其余设置沿用当前数据，由调用方合并。
-     */
+
+
     suspend fun readImport(uri: Uri): Pair<AppData?, SchoolImport?> = withContext(Dispatchers.IO) {
         val name = uri.lastPathSegment.orEmpty().lowercase()
         val mime = app.contentResolver.getType(uri).orEmpty().lowercase()

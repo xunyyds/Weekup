@@ -12,5 +12,5 @@ plugins {
 }
 rootProject.name = "xwake"
 include(":app")
-// Macrobenchmark host: 真机性能基线的唯一入口，见 benchmark/README.md。
+
 include(":benchmark")

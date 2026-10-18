@@ -54,7 +54,6 @@ class SchoolParserTest {
         assertEquals(1, SchoolParser.parse(source).courses.size)
     }
 
-    /** 一个格子里并排多门课：整学期导出时的常见形态，此前会让整次导入失败。 */
     @Test fun parsesSeveralCoursesInOneCell() {
         val source = """
             <table>
@@ -75,7 +74,6 @@ class SchoolParserTest {
         assertEquals("教1-201", english.location)
     }
 
-    /** 提示性备注行不产生课程，也不阻断导入。 */
     @Test fun noteRowDoesNotBlockImport() {
         val source = """
             <table>
@@ -89,7 +87,6 @@ class SchoolParserTest {
         assertEquals("数学", courses.single().name)
     }
 
-    /** 个别格子读不出周次时只跳过它，其余课程照常导入。 */
     @Test fun unreadableCellIsSkippedNotFatal() {
         val source = """
             <table>

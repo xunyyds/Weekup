@@ -28,18 +28,10 @@ import com.xu.wake.ui.XwakeGlyphKind
 import com.xu.wake.ui.XwakeShapes
 import com.xu.wake.ui.xwakeMotionEnabled
 
-/** Height of the collapsed pill; the shared element interpolates from here to the full screen. */
 val SearchPillHeight = 56.dp
 
-/** Corner radius of the collapsed pill; the expanded bar straightens out to 0dp. */
 internal val SearchPillRadius = XwakeShapes.sheet
 
-/**
- * The one search entry point in the app: a read-only pill at the top of the settings page.
- *
- * Tapping it does not focus anything — it opens the full-screen search, morphing this pill into
- * that screen's search bar via the shared element key [SearchFieldKey].
- */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SharedTransitionScope.XwakeSearchPill(
@@ -49,9 +41,7 @@ fun SharedTransitionScope.XwakeSearchPill(
 ) {
     val motion = xwakeMotionEnabled()
     val shape = RoundedCornerShape(SearchPillRadius)
-    // Exactly one end of the shared element may be visible at a time: the pill while collapsed, the
-    // expanded bar inside the overlay while open. Both report the same key, which is what makes the
-    // element travel between them instead of appearing in two places at once.
+
     val shared = if (motion) {
         Modifier.sharedElementWithCallerManagedVisibility(
             rememberSharedContentState(SearchFieldKey),

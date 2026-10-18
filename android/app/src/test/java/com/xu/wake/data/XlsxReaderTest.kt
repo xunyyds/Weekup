@@ -27,7 +27,7 @@ class XlsxReaderTest {
     fun gridFeedsTimetableParser() {
         val grid = open().use { XlsxReader.read(it) }
         val result = XlsxTimetable.parse(grid)
-        /* row1: 周一 JAVA、周二 思想道德；row2: 周二 公共英语；row3 备注被跳过。 */
+
         assertEquals(3, result.courses.size)
         val java = result.courses.first { it.name.contains("JAVA") }
         assertEquals(1, java.weekday)

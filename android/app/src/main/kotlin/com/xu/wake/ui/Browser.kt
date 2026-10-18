@@ -41,7 +41,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONTokener
 
-/* Hosts the SSO login legitimately passes through: the WeChat qrconnect frame and its callback. */
+
+
 private val LOGIN_HOSTS = listOf("open.weixin.qq.com", "login.weixin.qq.com", "weixin.qq.com")
 
 private fun loginHost(value: String): Boolean = runCatching {
@@ -77,15 +78,14 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     
     var chromeVisible by remember(url) { mutableStateOf(true) }
     
-    /* PC UA by default: the school's CAS serves its full desktop page (background image, header,
-       card) only to desktop user agents, and that is the page the user wants to see. The wide
-       viewport + overview zoom below is what makes that 624px-wide card fit a phone screen. */
+
+
     var desktopMode by remember(url) { mutableStateOf(true) }
     
     val desktopModeState = rememberUpdatedState(desktopMode)
     
-    /* Third-party cookies stay on: single sign-on legitimately hops between the identity
-       provider and the教务 system, and blocking them silently breaks the login round-trip. */
+
+
     val latestImport by rememberUpdatedState(onImport)
     var webView by remember(url) { mutableStateOf<WebView?>(null) }
     var loading by remember(url) { mutableStateOf(false) }
@@ -100,13 +100,13 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         if (browser != null && browser.canGoBack()) browser.goBack() else onBack()
     }
     BackHandler { if (recognized != null) recognized = null else back() }
-    /* Rotation, split-screen and density changes all move the usable width. Re-apply the mode so
-       the page keeps filling the screen instead of staying at the width it was first laid out for. */
+
+
     LaunchedEffect(configuration.screenWidthDp, configuration.screenHeightDp, configuration.orientation, desktopMode) {
         val browser = webView ?: return@LaunchedEffect
         if (!schoolWebUrl(browser.url.orEmpty())) return@LaunchedEffect
-        /* Inlined rather than calling applyMode(): a local fun cannot be referenced above its
-           declaration, and this effect has to sit with the other effects. */
+
+
         browser.settings.apply {
             userAgentString = if (desktopMode) DESKTOP_CHROME_UA else null
             useWideViewPort = false
@@ -147,14 +147,12 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     fun applyViewportScript(browser: WebView, desktop: Boolean) {
         val page = browser.url.orEmpty()
         if (!schoolWebUrl(page)) return
-        /* These scripts only adjust the document. They must NOT touch WebView settings:
-           loadWithOverviewMode cannot be changed after a page has laid out, because switching it
-           forces a re-layout against a different viewport, and pages whose height:100% chain
-           depends on the original viewport collapse to zero height. The mode is therefore fixed
-           before loading (see the loadUrl sites), not here. */
+
+
         if (desktop) browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
         browser.evaluateJavascript(CAS_FIT_SCRIPT, null)
-        /* Pages built on vh-size boxes collapse to zero height on this WebView; repair them. */
+
+
         browser.evaluateJavascript(VH_HEIGHT_REPAIR_SCRIPT, null)
     }
     
@@ -163,12 +161,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         
         browser.settings.apply {
             userAgentString = if (desktop) DESKTOP_CHROME_UA else null
-            /* Fixed-width pages (a 624px card on a 100vw/100vh body, no media queries) only lay
-               out correctly at a desktop-ish width, so ask for a wide viewport and let overview
-               mode scale the finished layout down to the screen. In mobile mode the page's own
-               meta viewport should drive layout instead, so overview stays off there. */
+
+
             useWideViewPort = false
-            /* Fixed before load: flipping this after layout collapses height:100% pages. */
+
+
             loadWithOverviewMode = needsOverviewScale(browser.url.orEmpty())
         }
         browser.setInitialScale(0)
@@ -196,10 +193,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         val generation = lifetime.generation
         scope.launch {
             try {
-                /*
-                 * 首屏可能只是课表预览小部件（课名截断、没有周次），无法据以导入。
-                 * 第一次解析失败时点开菜单里的课表页，稍候再读一次，直至读出课程或次数用尽。
-                 */
+
+
                 val imported = withTimeout(45_000) {
                     var failure: Exception? = null
                     var observed = ""
@@ -300,8 +295,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                 }).apply {
                     
                     var lastPageHeightPx = -1
-                    /* Lets the live DOM be inspected over adb during development; release
-                       builds keep this off. */
+
+
                     if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
@@ -316,8 +311,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                     setInitialScale(0)
                     settings.apply {
                         userAgentString = if (desktop) DESKTOP_CHROME_UA else null
-                        /* See applyMode(): desktop pages are fixed-width canvases and need a wide
-                           viewport plus overview scaling to fit the screen. */
+
+
                         useWideViewPort = false
                         loadWithOverviewMode = needsOverviewScale(url)
                         javaScriptEnabled = true
@@ -330,23 +325,18 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         savePassword = false
                         allowFileAccess = false
                         allowContentAccess = false
-                        /* WeChat's qrconnect iframe completes the login by opening a window and
-                           posting back; both were disabled, which left the scan with nowhere to go. */
+
                         javaScriptCanOpenWindowsAutomatically = true
                         setSupportMultipleWindows(true)
-                        /* Login commonly ends with an https identity provider redirecting to a
-                           cleartext (http) school system: a mixed-content downgrade. NEVER_ALLOW
-                           blocked that hop, so a completed scan never reached the timetable.
-                           Cleartext stays restricted by network_security_config. */
+
+
                         mediaPlaybackRequiresUserGesture = true
                     }
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     setDownloadListener { _, _, _, _, _ -> error = "不支持下载或外部跳转，请直接打开网页课表。" }
-                    /* WeChat's qrconnect frame finishes the login by opening a window; with
-                       multiple-window support on, that request needs a host or it is dropped. The
-                       popup is a WebView that shares this session's cookies, so the login result
-                       lands back in the same jar. */
+
+
                     webChromeClient = object : WebChromeClient() {
                         override fun onCreateWindow(
                             view: WebView,
@@ -365,8 +355,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                                     request: WebResourceRequest,
                                 ): Boolean = false
                             }
-                            /* The transport carries the actual navigation; route the popup back
-                               into this WebView so the CAS redirect lands in the visible page. */
+
+
                             popup.webChromeClient = object : WebChromeClient() {
                                 override fun onCloseWindow(window: WebView) {
                                     runCatching { (window.parent as? android.view.ViewGroup)?.removeView(window) }
@@ -394,17 +384,15 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         }
                         override fun onPageStarted(view: WebView, target: String?, favicon: Bitmap?) {
                             if (!lifetime.alive) return
-                            /* Rewrite the viewport as early as the document exists, so the desktop
-                               canvas width applies to the first layout instead of forcing a reflow
-                               (and a visible jump) once onPageFinished fires. */
+
+
                             applyViewportScript(view, desktopModeState.value)
                             lifetime.generation++
                             recognized = null
                             
                             lastPageHeightPx = -1
-                            /* Only reject what cannot be a login page. Blocking every non-school
-                               host also killed the WeChat qrconnect frame and its callback, which
-                               is why scanning appeared to do nothing. */
+
+
                             if (!schoolWebUrl(target.orEmpty()) && !loginHost(target.orEmpty())) {
                                 view.stopLoading()
                                 loading = false
@@ -749,39 +737,14 @@ private val PAGE_HEIGHT_SCRIPT = """
 
 
 
-/*
- * Layout adaptation for fixed-width single-sign-on login pages.
- *
- * That page is a fixed desktop canvas: body is 100vw x 100vh with overflow hidden, and the login
- * card is absolutely positioned at top:50%. Scaled down to a phone it renders correctly but leaves
- * a large empty band underneath, because the card is centred against a viewport far taller than
- * the card itself. Putting the card back into normal flow and letting the body size to its content
- * makes the page end where the card ends, so the screen is filled edge to edge.
- *
- * Everything is scoped to these two hosts; other sites are untouched.
- */
-/*
- * Layout width handed to fixed-width desktop pages.
- *
- * The pages this app targets centre a 624px card on a 100vw/100vh body with overflow hidden and
- * ship no media queries. At phone width that card overflows and is clipped, so the page needs a
- * desktop-ish canvas: 700 keeps the card at its natural size while still fitting the screen at
- * roughly 56% scale (~350px on a 393dp phone). Wider canvases shrink the card into an unreadable
- * sliver; narrower ones let it overflow again.
- */
+
+
+
+
 private const val DESKTOP_VIEWPORT_WIDTH = 700
 
-/*
- * Height repair for pages whose layout is expressed in `vh`.
- *
- * Measured on a device: this WebView resolves `vh` to 0px even for a trivial test element, while
- * window.innerHeight reports the real value. Campus systems commonly build their whole shell on
- * `height:100vh`, so every container collapses to zero and the page renders as a thin strip.
- *
- * The fix converts the vh-based boxes to pixel heights computed from innerHeight, and lets the
- * content frame absorb the remaining space. Scoped to pages that actually use vh containers, so
- * ordinary pages are untouched.
- */
+
+
 private val VH_HEIGHT_REPAIR_SCRIPT = """
 (function() {
   function apply() {
@@ -822,26 +785,15 @@ private val VH_HEIGHT_REPAIR_SCRIPT = """
 })()
 """.trimIndent()
 
-/*
- * Whether a URL belongs to a fixed-width sign-on canvas that needs overview scaling.
- *
- * Decided from the URL, never from the rendered document: WebView applies
- * loadWithOverviewMode during layout, so flipping it after a page has loaded forces a re-layout
- * that collapses height:100% chains. Sign-on pages are the ones hosted on the identity provider
- * (the CAS path), which is stable across deployments; everything else keeps its own viewport.
- */
+
+
 private fun needsOverviewScale(url: String): Boolean = runCatching {
     val path = Uri.parse(url).path.orEmpty().lowercase()
     path.contains("/cas/") || path.endsWith("sso.jsp")
 }.getOrDefault(false)
 
-/*
- * Rewrites the page viewport to a desktop canvas width. Only applied in desktop mode; mobile mode
- * keeps whatever the page declares.
- *
- * Runs from onPageStarted, so it must not depend on parsed stylesheets, and must tolerate the
- * document not yet having a <head>: it retries briefly rather than giving up.
- */
+
+
 private val DESKTOP_VIEWPORT_SCRIPT = """
 (function() {
   /*
@@ -1046,13 +998,8 @@ private val TABLE_EXTRACTION = """
 })()
 """.trimIndent()
 
-/*
- * 打开课表页。
- *
- * 登录后落在「我的桌面」，那上面的课表只是预览小部件：课程名被截断，也不含周次，
- * 无法据以导入。真正的课表要点开左侧菜单里的课表条目后才会加载进来。
- * 这里按文字找到可点击的课表条目并触发它，优先「理论课表」，其次「学期」。
- */
+
+
 private val OPEN_TIMETABLE_SCRIPT = """
 (function() {
   function label(e) { return (e.textContent || '').replace(/\s+/g, ' ').trim(); }

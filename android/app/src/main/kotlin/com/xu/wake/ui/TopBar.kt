@@ -28,24 +28,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * 紧凑顶栏。
- *
- * 与系统状态栏联动：自身高度里含状态栏内边距，标题不会被时钟与信号图标压住。
- * 随课表滚动在 [expandedHeight] 与 [collapsedHeight] 之间连续收缩，副标题在收起时淡出。
- *
- * 展开高度也刻意压得比 Material 的 LargeTopAppBar（152dp）小得多——课表才是主体。
- *
- * @param collapseFraction 0 = 完全展开，1 = 完全收起，由调用方按滚动量给出。
- */
 @Composable
 fun XwakeTopBar(
     title: String,
     collapseFraction: Float,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    expandedHeight: Dp = 58.dp,
-    collapsedHeight: Dp = 44.dp,
+    expandedHeight: Dp = 46.dp,
+    collapsedHeight: Dp = 40.dp,
     titleContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -86,12 +76,6 @@ fun XwakeTopBar(
     }
 }
 
-/**
- * 系统状态栏与导航栏的显隐开关。
- *
- * 沉浸浏览课表时把系统栏一并收起，退出沉浸或离开课表页时恢复。
- * 收起时保留 BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE，边缘内滑仍可临时唤出。
- */
 @Composable
 fun rememberSystemBars(): (Boolean) -> Unit {
     val context = LocalContext.current

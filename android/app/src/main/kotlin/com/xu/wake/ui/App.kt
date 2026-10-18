@@ -58,10 +58,12 @@ fun XwakeApp() {
     val editing = data.courses.firstOrNull { it.id == editingId }
     var details by remember { mutableStateOf<CourseSession?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    /* 课表浏览到哪一周是临时状态：翻周不写回设置，设置里的「当前周」才是锚点。 */
+
+
     var viewWeek by remember { mutableIntStateOf(1) }
     var immersive by remember { mutableStateOf(false) }
-    /* 排课编辑模式：长按课表或从右上角菜单进入，顶栏出现「完成」。 */
+
+
     var editMode by remember { mutableStateOf(false) }
     val systemBars = rememberSystemBars()
     var highlightRequest by remember { mutableStateOf<String?>(null) }
@@ -92,7 +94,8 @@ fun XwakeApp() {
         if (uri != null && !busy) scope.launch {
             busy = true
             try {
-                /* .xlsx 走表格导入，其余按 JSON 备份处理。 */
+
+
                 val (backup, sheet) = service.readImport(uri)
                 if (sheet != null) {
                     commit(ScheduleActions.importSchool(data, sheet))
@@ -137,6 +140,9 @@ fun XwakeApp() {
         val next = when(data.settings.theme) { "system" -> "dark"; "dark" -> "light"; else -> "system" }
         commit(data.copy(settings = data.settings.copy(theme = next)))
     }
+
+
+    val overlayDock = data.settings.navigationStyle != "default"
     LaunchedEffect(data.settings.currentWeek) { viewWeek = data.settings.currentWeek }
     LaunchedEffect(page, tab) {
         if (page != "home" || tab != 0) { immersive = false; systemBars(false) }
@@ -149,10 +155,11 @@ fun XwakeApp() {
         Box(Modifier.fillMaxSize()) {
         if (ready) SharedTransitionLayout {
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
-            if (page == "home" && !(immersive && data.settings.autoHideBars)) Column(Modifier.navigationBarsPadding()) {
+            val hidden = immersive && data.settings.autoHideBars
+            if (page == "home" && !overlayDock && !hidden) Column(Modifier.navigationBarsPadding()) {
                 XwakeDock(
                     data.settings.navigationStyle, tab, { tab = it },
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth(),
                 )
             }
         }) { padding ->
@@ -205,15 +212,23 @@ fun XwakeApp() {
                 }
             }
         }
+
+
+        if (ready && page == "home" && overlayDock && !(immersive && data.settings.autoHideBars)) {
+            XwakeDock(
+                data.settings.navigationStyle, tab, { tab = it },
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
         if (busy) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha=.12f)).clickable(interactionSource=remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication=null) {}, contentAlignment=Alignment.Center) { CircularProgressIndicator() }
         XwakeSplash(visible = splashVisible)
         XwakeSearchOverlay(
             visible = searchOpen,
             data = data,
             onDismiss = { searchOpen = false },
-            /* Searching is a navigation aid: land on the course in the timetable (the week it
-               actually meets) and let the user decide whether to edit it. Opening the editor
-               straight from a search result was a destructive surprise. */
+
+
             onCourse = { id ->
                 searchOpen = false
                 val target = data.courses.firstOrNull { it.id == id }
@@ -253,7 +268,8 @@ fun XwakeApp() {
                     Text(course.name, style = MaterialTheme.typography.headlineSmall)
                     val from = data.settings.periods.firstOrNull { it.period == course.startPeriod }?.startMinutes
                     val to = data.settings.periods.firstOrNull { it.period == course.endPeriod }?.endMinutes
-                    /* 时间由作息设置换算：课程只存节次，时钟区间是派生值。 */
+
+
                     val span = if (from != null && to != null && to > from) "\n时间：${clock(from)}—${clock(to)}" else ""
                     Text("教师：${course.teacher}\n地点：${course.location}\n${dayNames[course.weekday-1]} · 第 ${course.startPeriod}—${course.endPeriod} 节$span\n周次：${course.weeks.joinToString("、")}")
                     Row { Button(onClick = { editingId = course.id; details = null; page = "course" }) { Text("编辑课程") }; TextButton(onClick = { confirmDelete = true }) { Text("删除课程") } }

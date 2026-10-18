@@ -28,7 +28,7 @@ class MoveActionsTest {
         val b = moved.courses.first { it.id == "b" }
         assertEquals(3, a.weekday); assertEquals(5, a.startPeriod)
         assertEquals(1, b.weekday); assertEquals(1, b.startPeriod)
-        /* b 原本占 5-6 两节、跨度为 1，换到第 1 节后应落在 1-2。 */
+
         assertEquals(2, b.endPeriod)
         assertEquals("跨度保持不变", 1, b.endPeriod - b.startPeriod)
     }

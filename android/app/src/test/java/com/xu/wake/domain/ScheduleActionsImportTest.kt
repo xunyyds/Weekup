@@ -8,13 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * 教务导入的合并规则。
- *
- * 站点给的作息比本地默认更准，但本地可能有更多节次（默认 14 节 vs 站点 10 节）。
- * 直接合并会让两套时间重叠，设置校验随即抛「节次时间重叠」，整次导入失败——
- * 这正是真机上出现过的失败。
- */
 class ScheduleActionsImportTest {
 
     private fun localPeriods() = (1..14).map {

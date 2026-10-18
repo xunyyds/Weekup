@@ -12,11 +12,8 @@ object ScheduleActions {
     fun importSchool(data:AppData,imported:SchoolImport):AppData {
         require(imported.courses.isNotEmpty()) { "没有可导入的课程" }
         val count=maxOf(imported.weekCount ?: data.settings.weekCount,imported.courses.maxOf { it.weeks.max() })
-        /*
-         * 导入的作息来自站点，优先采信。本地多出来的节次只在排在导入节次之后时才保留；
-         * 直接合并会让本地较早的节次与导入节次时间重叠，触发设置校验，整次导入以
-         * 「节次时间重叠」失败。
-         */
+
+
         val periods=if(imported.periods.isEmpty())data.settings.periods else run {
             val merged=imported.periods.associateBy { it.period }.toMutableMap()
             val lastEnd=imported.periods.maxOf { it.endMinutes }
@@ -30,17 +27,15 @@ object ScheduleActions {
         ),courses=imported.courses,colors=emptyMap())
     }
 
-    /** 拖动排课时的冲突处理方式。 */
+
+
     enum class MoveMode { SWAP, OVERWRITE }
 
     private fun occupying(data: AppData, day: Int, start: Int, end: Int) =
         data.courses.filter { it.weekday == day && it.startPeriod <= end && it.endPeriod >= start }
 
-    /**
-     * 把一门课挪到 [day] 的第 [startPeriod] 节，保持原有节次跨度。
-     *
-     * SWAP 与目标位置上的课互换（各自保留自己的跨度），OVERWRITE 先清掉目标位置上的课。
-     */
+
+
     fun moveCourse(data: AppData, id: String, day: Int, startPeriod: Int, mode: MoveMode): AppData {
         val course = data.courses.firstOrNull { it.id == id } ?: return data
         require(day in 1..7 && startPeriod in 1..100) { "课程参数无效" }
@@ -54,7 +49,8 @@ object ScheduleActions {
                 val gone = targets.map { it.id }.toSet()
                 courses = courses.filterNot { it.id in gone }
             }
-            /* 交换只针对一门课：有多个目标时与最先开始的那门互换，语义仍然明确。 */
+
+
             MoveMode.SWAP -> targets.minByOrNull { it.startPeriod }?.let { target ->
                 courses = courses.map {
                     when (it.id) {
@@ -70,7 +66,8 @@ object ScheduleActions {
         })
     }
 
-    /** 整列移动：把 [from] 日的课与 [to] 日对调（SWAP）或覆盖过去（OVERWRITE）。 */
+
+
     fun moveDay(data: AppData, from: Int, to: Int, mode: MoveMode): AppData {
         require(from in 1..7 && to in 1..7) { "星期参数无效" }
         if (from == to) return data
@@ -85,11 +82,8 @@ object ScheduleActions {
         return data.copy(courses = moved)
     }
 
-    /**
-     * 整行移动：把起始于第 [fromPeriod] 节的课平移到第 [toPeriod] 节，跨度保持不变。
-     *
-     * SWAP 让目标行整行换到起始行，OVERWRITE 先清掉目标行。
-     */
+
+
     fun moveRow(data: AppData, fromPeriod: Int, toPeriod: Int, mode: MoveMode): AppData {
         require(fromPeriod in 1..100 && toPeriod in 1..100) { "节次参数无效" }
         if (fromPeriod == toPeriod) return data
@@ -113,7 +107,8 @@ object ScheduleActions {
         return data.copy(courses = moved)
     }
 
-    /** 目标位置上是否有课，用于决定要不要弹冲突提示。 */
+
+
     fun hasConflict(data: AppData, day: Int, startPeriod: Int, endPeriod: Int): Boolean =
         occupying(data, day, startPeriod, endPeriod).isNotEmpty()
 

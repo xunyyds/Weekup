@@ -92,18 +92,8 @@ import com.xu.wake.ui.palette.paletteKindOrder
 import com.xu.wake.ui.xwakeMillis
 import com.xu.wake.ui.xwakeMotionEnabled
 
-/** Shared-element key linking the settings-page search pill to the full-screen search bar. */
 const val SearchFieldKey = "xwake-search-field"
 
-/**
- * Full-screen search over courses, settings and actions.
- *
- * The search bar is a shared element with the settings-page pill, so opening reads as that pill
- * growing to fill the screen instead of a second surface appearing on top of the page.
- *
- * Only [visible] decides whether this subtree is on screen; everything under the bar keys off its
- * own state, so a keystroke recomposes the field and the list and nothing else.
- */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SharedTransitionScope.XwakeSearchOverlay(
@@ -118,8 +108,7 @@ fun SharedTransitionScope.XwakeSearchOverlay(
     val keyboard = LocalSoftwareKeyboardController.current
     val motion = xwakeMotionEnabled()
     val focusRequester = remember { FocusRequester() }
-    // The query is held here but never read here: only SearchPane observes it, so a keystroke
-    // invalidates that pane and leaves this root — the shared element and its animation — alone.
+
     val query = rememberSaveable { mutableStateOf("") }
 
     val index = remember(data.courses) { SearchIndex.forData(data) }
@@ -147,8 +136,6 @@ fun SharedTransitionScope.XwakeSearchOverlay(
         }
     }
 
-    // The focus request must wait for the first frame of the entry transition: before that the bar
-    // is not attached yet, the request is dropped, and the keyboard never opens.
     LaunchedEffect(visible) {
         if (visible) {
             withFrameNanos { }
@@ -164,8 +151,6 @@ fun SharedTransitionScope.XwakeSearchOverlay(
         if (query.value.isNotEmpty()) query.value = "" else close()
     }
 
-    // The bar keeps its pill radius while shared-element bounds grow; straightening it inside the
-    // same window is what stops the corners popping at either end of the transition.
     val radius = remember { Animatable(SearchPillRadius.value) }
     val scrimAlpha = remember { Animatable(0f) }
     val cornerMillis = xwakeMillis(XwakeMotion.standard)
@@ -225,10 +210,6 @@ fun SharedTransitionScope.XwakeSearchOverlay(
     }
 }
 
-/**
- * Everything that depends on what the user typed. Kept in its own scope so the query, the result
- * set and the list are the only things a keystroke can recompose.
- */
 @Composable
 private fun SearchPane(
     query: MutableState<String>,
@@ -242,8 +223,7 @@ private fun SearchPane(
     onPick: (PaletteEntry) -> Unit,
     onClose: () -> Unit,
 ) {
-    // Refinement hint: the previous result set is an accelerator, not UI state, so it lives in a
-    // plain slot — writing it during composition must not invalidate anything.
+
     val refineHint = remember(index) { Ref<SearchResult?>(null) }
     val result = remember(query.value, index) {
         index.search(query.value, refineHint.value).also { refineHint.value = it }
@@ -562,5 +542,4 @@ private fun EmptyState(query: String, onClear: () -> Unit, onClose: () -> Unit) 
     }
 }
 
-/** Plain mutable slot: a refinement hint must never invalidate composition when written. */
 private class Ref<T>(var value: T)

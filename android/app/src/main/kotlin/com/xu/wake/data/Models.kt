@@ -9,26 +9,19 @@ data class PeriodTime(val period: Int, val startMinutes: Int, val endMinutes: In
     }
 }
 
-/**
- * 默认作息：一天 20 节。
- *
- * 8:00 开始、每节 40 分钟、间隔 5 分钟，最后一节 22:55 结束。20 节必须挤进一天，
- * 所以这是一套均匀的起始网格；真实作息在「设置 → 学期与课表 → 节次时间」里改。
- */
+
+
 const val DEFAULT_PERIOD_COUNT = 20
 
 fun defaultDayPeriods(): List<PeriodTime> = resizePeriods(emptyList(), DEFAULT_PERIOD_COUNT)
 
-/**
- * 把作息调整到 [count] 节。
- *
- * 减少时截断尾部；增加时沿用相邻两节的间隔继续外推，超出当天则拒绝——
- * 静默产生 25:00 这种时间比报错更糟。
- */
+
+
 fun resizePeriods(periods: List<PeriodTime>, count: Int): List<PeriodTime> {
     require(count in 1..100) { "每日节数须在 1–100 之间" }
     if (periods.isEmpty()) {
-        /* 起始网格：8:00 起、40 分钟一节、间隔 5 分钟。 */
+
+
         return (0 until count).map { i ->
             val start = 480 + i * 45
             PeriodTime(i + 1, start, start + 40)
@@ -70,7 +63,8 @@ data class AppSettings(
     val motionSpeed: Double = 1.0,
     val reduceMotion: Boolean = false,
     val transitionStyle: String = "shared",
-    /** 滚动课表时自动隐藏顶栏、底栏与系统状态栏，把纵向空间让给课表。 */
+
+
     val autoHideBars: Boolean = false,
 ) {
     init {
@@ -132,8 +126,8 @@ data class SchoolImport(
 fun adjustPeriods(periods: List<PeriodTime>, index: Int, start: Int, end: Int, cascade: Boolean = true): List<PeriodTime> {
     require(index in periods.indices)
     val delta = end - periods[index].endMinutes
-    /* 先判溢出再构造，否则 PeriodTime 会抛出难懂的「无效的节次时间」。一天 20 节时
-       余量本来就少，往后顺延很容易顶到午夜。 */
+
+
     if (cascade && delta > 0) {
         require(periods.last().endMinutes + delta <= 1440) { "顺延后最后一节会超出当天，请先缩短其它节次" }
     }

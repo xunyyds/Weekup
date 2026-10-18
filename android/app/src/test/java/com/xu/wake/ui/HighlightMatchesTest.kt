@@ -30,14 +30,14 @@ class HighlightMatchesTest {
 
     @Test
     fun overlappingTermsMergeIntoOneSpan() {
-        // 动(0)效(1)设(2)置(3) — "动效"=0..1 and "效设"=1..2 overlap on 效.
+
         val result = spans("动效设置", listOf("动效", "效设"))
         assertEquals(listOf(0 to 3), result)
     }
 
     @Test
     fun adjacentTermsMergeIntoOneSpan() {
-        // 主(0)题(1)颜(2)色(3) — "主题"=0..1 and "颜色"=2..3 are adjacent, so merge.
+
         val result = spans("主题颜色", listOf("主题", "颜色"))
         assertEquals(listOf(0 to 4), result)
     }

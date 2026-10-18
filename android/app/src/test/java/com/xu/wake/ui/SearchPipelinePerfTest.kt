@@ -11,14 +11,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Measures the search pipeline end to end on the JVM.
- *
- * "before" is [legacySearch] over [legacyEntries] — the shape shipped in CommandPalette.kt, where
- * every keystroke rebuilt the whole entry list and rescored every entry from scratch. "after" is
- * [SearchIndex], which builds once per data instance and refines the previous hit list while the
- * user types. Both run the same workload, so the printed table is apples to apples.
- */
 class SearchPipelinePerfTest {
 
     private val courseCount = 2000
@@ -39,13 +31,10 @@ class SearchPipelinePerfTest {
         },
     )
 
-    /** Queries a user would actually type, cycled up to [queryCount]. */
     private fun queries(): List<String> {
         val seeds = listOf("周次", "教师1", "教学", "导出", "主题", "课程", "设置", "颜色", "动画", "a")
         return List(queryCount) { i -> seeds[i % seeds.size] }
     }
-
-    // ---- before: CommandPalette.kt's remember(entries, terms) block, verbatim ---------------
 
     private fun legacyEntries(data: AppData): List<PaletteEntry> = buildList {
         data.courses.forEach { course ->
@@ -61,7 +50,7 @@ class SearchPipelinePerfTest {
                 ),
             )
         }
-        // 43 static entries rebuilt on every call, exactly as paletteEntries(data) did.
+
         repeat(43) { add(paletteActions[it % paletteActions.size]) }
     }
 

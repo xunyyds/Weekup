@@ -95,17 +95,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 
                                                                                               
-/**
- * Tracks how many staggered children a Section has already handed out, so rows claim their position
- * in the entrance cascade without the call site passing an index. Mutated once per row insertion
- * from inside remember, and never observed as state, so it cannot trigger recomposition. With
- * reduced motion [Section] does not provide it at all and every row skips its entrance animation.
- */
+
+
 private class StaggerCursor { var next = 0 }
 
 private val LocalStaggerCursor = staticCompositionLocalOf<StaggerCursor?> { null }
 
-/** Vertical rise of a staggered row, in dp. */
+
+
 private const val StaggerRiseDp = 10f
 
 @Composable
@@ -149,9 +146,7 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
             shape = shape,
             color = MaterialTheme.colorScheme.surfaceContainer,
         ) {
-            // Always provided, even when null: keeps the composition structure identical whether
-            // or not motion is enabled. A null cursor makes every row fall back to slot 0, whose
-            // stagger delay is zero, so nothing shifts — but no branch has to rebuild the subtree.
+
             CompositionLocalProvider(LocalStaggerCursor provides cursor) {
                 Column(content = content)
             }
@@ -165,7 +160,7 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     val cursor = LocalStaggerCursor.current
     val slot = remember(cursor) { cursor?.next?.also { cursor.next = it + 1 } ?: 0 }
-    // Unconditional so the composition structure is stable across motion-setting changes.
+
     val delay = xwakeStaggerDelay(slot)
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -265,13 +260,14 @@ fun XwakeDock(
 ) {
     val labels = listOf("课表", "设置")
     val selected = index.coerceIn(labels.indices)
-    val floating = style == "floating" || style == "liquid"
+    val solid = style == "default"
+    val floating = !solid
     val liquid = style == "liquid"
     val colors = MaterialTheme.colorScheme
-    val outerRadius = if (floating) XwakeShapes.dock else XwakeShapes.card
+    val outerRadius = if (floating) XwakeShapes.dock else XwakeShapes.tiny
     val dockInset = 6.dp
-    val shape = XwakeShapes.rounded(outerRadius)
-    // Indicator corners stay concentric with the outer shell at any tier.
+    val shape = if (solid) androidx.compose.ui.graphics.RectangleShape else XwakeShapes.rounded(outerRadius)
+
     val indicatorShape = XwakeShapes.rounded(XwakeShapes.nested(outerRadius, dockInset))
     val motion = xwakeMotionEnabled()
     var dragging by remember { mutableStateOf(false) }
@@ -296,20 +292,20 @@ fun XwakeDock(
             colors.surfaceContainerHigh,
         )
         .border(1.dp, colors.outlineVariant.copy(alpha = 0.55f), shape)
-    else Modifier.background(colors.surfaceContainer)
+    else Modifier.background(if (solid) colors.surfaceContainerLow else colors.surfaceContainer)
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
         BoxWithConstraints(
-            Modifier.widthIn(max = if (floating) 360.dp else 560.dp)
+            Modifier.widthIn(max = if (floating) 300.dp else androidx.compose.ui.unit.Dp.Infinity)
                 .fillMaxWidth()
                 .then(
                     if (floating) {
                         XwakeElevation.soft(XwakeElevation.dock, shape, 0.05f, 0.10f)
                     } else Modifier,
                 )
-                .clip(shape).then(base).padding(dockInset)
+                .clip(shape).then(base).padding(if (floating) dockInset else 0.dp)
                 .onSizeChanged { measuredWidth = it.width }
                 .pointerInput(rtl) {
                     detectHorizontalDragGestures(
@@ -350,7 +346,7 @@ fun XwakeDock(
         ) {
             val slot = maxWidth / labels.size
             
-            Box(Modifier.matchParentSize()) {
+            if (floating) Box(Modifier.matchParentSize()) {
                 val indicatorMaterial = if (liquid) Modifier.liquidGlass(
                     XwakeShapes.nested(outerRadius, dockInset).value,
                     colors.primaryContainer.copy(alpha = 0.40f),
@@ -374,6 +370,12 @@ fun XwakeDock(
                         ),
                 )
             }
+
+
+            if (solid) Box(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp)
+                    .background(colors.outlineVariant.copy(alpha = .6f)),
+            )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 labels.forEachIndexed { item, title ->
                     val source = remember { MutableInteractionSource() }
@@ -385,7 +387,11 @@ fun XwakeDock(
                         } else snap(),
                         label = "Dock tab press",
                     )
-                    val ink = if (item == selected) colors.onPrimaryContainer else colors.onSurfaceVariant
+                    val ink = when {
+                        item != selected -> colors.onSurfaceVariant
+                        solid -> colors.primary
+                        else -> colors.onPrimaryContainer
+                    }
                     Column(
                         Modifier.weight(1f).clip(XwakeShapes.rounded(XwakeShapes.card))
                             .selectable(
@@ -457,10 +463,7 @@ private fun DockGlyph(index: Int, color: Color) {
 }
 
 
-// ============================================================================
-// Search primitives — shared by 设置页 (Settings.kt) and 命令面板 (CommandPalette.kt).
-// Appended by settings-dev; nothing above this line was modified.
-// ============================================================================
+
 
                      
                                              
@@ -487,7 +490,7 @@ fun highlightMatches(
         }
     }
     if (ranges.isEmpty()) return AnnotatedString(text)
-    // Merge overlapping/adjacent ranges so a char matched by two terms is styled once.
+
     val merged = mutableListOf<IntRange>()
     ranges.sortedBy { it.first }.forEach { range ->
         val last = merged.lastOrNull()

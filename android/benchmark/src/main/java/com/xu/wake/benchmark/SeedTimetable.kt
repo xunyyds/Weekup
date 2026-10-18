@@ -8,17 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Prepares the device, then stops. Deliberately not a benchmark: it is the one-time setup step the
- * scrolling and search benchmarks depend on, kept as its own test so it can be re-run on a wiped
- * device without re-measuring anything.
- *
- * Run it with:
- * ```
- * ./gradlew :benchmark:connectedBenchmarkAndroidTest \
- *   -Pandroid.testInstrumentationRunnerArguments.class=com.xu.wake.benchmark.SeedTimetable
- * ```
- */
 @LargeTest
 @RunWith(AndroidJUnit4::class)
 class SeedTimetable {

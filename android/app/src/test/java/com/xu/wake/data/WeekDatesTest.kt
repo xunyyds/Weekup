@@ -7,7 +7,6 @@ import java.time.LocalDate
 
 class WeekDatesTest {
 
-    /** 2026-09-07 是星期一。 */
     private val monday = LocalDate.of(2026, 9, 7)
 
     @Test fun weekOneStartsAtStartDate() {
@@ -21,11 +20,12 @@ class WeekDatesTest {
         assertEquals(monday.plusDays(7 * 7 + 3), WeekDates.on(monday, 8, 4))
     }
 
-    /** 开学日不是周一时，星期列仍要落到正确的日期上。 */
     @Test fun startOnWednesdayShiftsColumns() {
         val wed = LocalDate.of(2026, 9, 9)
-        assertEquals(wed, WeekDates.on(wed, 1, 3))          // 周三
-        assertEquals(wed.plusDays(5), WeekDates.on(wed, 1, 1)) // 同周的周一在 5 天后
+        assertEquals(wed, WeekDates.on(wed, 1, 3))
+
+        assertEquals(wed.plusDays(5), WeekDates.on(wed, 1, 1))
+
         assertEquals(wed.minusDays(2), WeekDates.on(wed, 1, 1).minusDays(7))
     }
 
@@ -43,7 +43,6 @@ class WeekDatesTest {
         assertEquals(8, WeekDates.weekOf(monday, monday.plusDays(49)))
     }
 
-    /** 今天早于开学日期时不应算出 0 或负数。 */
     @Test fun beforeStartClampsToOne() {
         assertEquals(1, WeekDates.weekOf(monday, monday.minusDays(30)))
     }

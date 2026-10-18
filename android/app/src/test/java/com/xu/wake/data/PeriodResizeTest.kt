@@ -14,7 +14,6 @@ class PeriodResizeTest {
         assertEquals(listOf(1), periods.map { it.period }.distinct().take(1))
     }
 
-    /** 默认作息必须严格递增且不重叠，否则课表左栏会自相矛盾。 */
     @Test fun defaultIsMonotonicAndInsideTheDay() {
         val periods = defaultDayPeriods()
         periods.zipWithNext().forEach { (a, b) ->

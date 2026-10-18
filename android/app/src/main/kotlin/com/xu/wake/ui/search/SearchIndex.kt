@@ -7,13 +7,9 @@ import com.xu.wake.ui.palette.courseEntries
 import com.xu.wake.ui.palette.paletteActions
 import com.xu.wake.ui.palette.settingEntries
 
-/**
- * A palette entry prepared for repeated scoring: fields are pre-lowercased so a keystroke neither
- * re-allocates a SearchText nor re-folds case per character.
- */
 class IndexedEntry internal constructor(
     val entry: PaletteEntry,
-    /** Position in the original list — the tie-breaker that keeps ordering identical to a stable full sort. */
+
     val order: Int,
     title: String,
     path: String,
@@ -23,7 +19,6 @@ class IndexedEntry internal constructor(
     val path: String = path.lowercase()
     val keywords: String = keywords.lowercase()
 
-    /** Same weights as [com.xu.wake.ui.searchScore]; -1 when any term misses every field. */
     fun score(terms: List<String>): Int {
         var total = 0
         for (i in terms.indices) {
@@ -41,9 +36,8 @@ class IndexedEntry internal constructor(
     }
 }
 
-/** One result set. Hand it back to [SearchIndex.search] as refineFrom to narrow the next query. */
 class SearchResult internal constructor(
-    /** Lowercased terms that produced this result. */
+
     val terms: List<String>,
     val entries: List<PaletteEntry>,
     internal val hits: List<IndexedEntry>,
@@ -51,7 +45,6 @@ class SearchResult internal constructor(
 ) {
     val isEmpty: Boolean get() = entries.isEmpty()
 
-    /** Score of the result at [index]; label highlighting and ordering both use it. */
     fun scoreAt(index: Int): Int = scores[index]
 
     companion object {
@@ -59,17 +52,6 @@ class SearchResult internal constructor(
     }
 }
 
-/**
- * Searchable projection of the app's palette entries.
- *
- * Two costs leave the typing path:
- *  - the 43 static entries (settings + actions) are built once per process instead of on every
- *    [AppData] change, and course entries are rebuilt only when the course list instance changes;
- *  - refining a query ("周" -> "周次") rescans only the previous hits.
- *
- * Refinement is exact because results are ordered by (score desc, original index asc) — a total
- * order that does not depend on the input order, so a stable full sort agrees with it.
- */
 class SearchIndex private constructor(
     val entries: List<PaletteEntry>,
     private val indexed: List<IndexedEntry>,
@@ -83,8 +65,7 @@ class SearchIndex private constructor(
             if (previous.hits.size == indexed.size) indexed else previous.hits.map { indexed[it.order] }
         } ?: indexed
         if (pool.isEmpty()) return SearchResult(terms, emptyList(), emptyList(), IntArray(0))
-        // Pack (inverted score, original index) into one Long and sort primitives: no boxing per
-        // comparison, and the index component makes the order total, so ties keep palette order.
+
         val packed = LongArray(pool.size)
         var count = 0
         for (i in pool.indices) {
@@ -107,11 +88,10 @@ class SearchIndex private constructor(
         next.size > previous.size && next.subList(0, previous.size) == previous
 
     companion object {
-        /** Split on whitespace and fold case — the shared shape of every scoring term. */
+
         fun normalize(raw: String): List<String> =
             raw.trim().lowercase().split(WHITESPACE).filter { it.isNotEmpty() }
 
-        /** Settings and action entries never depend on user data; build them once per process. */
         private val staticEntries: List<PaletteEntry> by lazy { settingEntries() + paletteActions }
 
         private var cachedCourses: List<CourseSession>? = null
@@ -119,7 +99,6 @@ class SearchIndex private constructor(
         private var cachedIndex: SearchIndex? = null
         private var cachedIndexCourses: List<CourseSession>? = null
 
-        /** Course entries are rebuilt only when the course list instance actually changes. */
         fun courseEntriesFor(courses: List<CourseSession>): List<PaletteEntry> {
             if (courses !== cachedCourses) {
                 cachedCourses = courses
@@ -149,7 +128,6 @@ class SearchIndex private constructor(
 
         private val WHITESPACE = Regex("\\s+")
 
-        /** Scores are term-count × 100 at most; this keeps the packed (score, index) key positive. */
         private const val SCORE_CEILING = 0x00FF_FFFF
         private const val ORDER_MASK = 0xFFFF_FFFFL
     }

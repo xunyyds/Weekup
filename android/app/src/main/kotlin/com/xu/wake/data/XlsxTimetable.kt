@@ -2,17 +2,6 @@ package com.xu.wake.data
 
 import java.util.UUID
 
-/**
- * 把 xlsx 的二维网格映射成课程。
- *
- * 与 [SchoolParser] 共用同一套星期、节次、周次判定，保证「网页导入」和「表格导入」
- * 得到一致的结果；区别只在于数据来源是格子文本而不是 HTML。
- *
- * 期望的表结构（与多数教务导出的课表一致）：
- * - 某一行是星期表头：星期一 … 星期日（或 周一 … 周日）
- * - 首列是节次：`第一节`、`第1节`、`第一二节 (01,02小节)`、`1-2节` 等
- * - 其余格子里放课程文本，需含周次（`1-16周`、`1-16(周)`、`1-16周(单)` …）
- */
 object XlsxTimetable {
 
     private val weekday = Regex("^(?:星期|周)([一二三四五六日天])$")
@@ -22,11 +11,9 @@ object XlsxTimetable {
     private val weekExpression = Regex("(\\d+(?:\\s*[-—~～至]\\s*\\d+)?(?:\\s*[,，、]\\s*\\d+(?:\\s*[-—~～至]\\s*\\d+)?)*)\\s*(?:(?:[（(]\\s*([单双])?\\s*周\\s*[）)])|(?:周\\s*(?:[（(]\\s*([单双])\\s*周?\\s*[）)])?)|(?:([单双])\\s*周))")
     private val timeRange = Regex("(\\d{1,2})[:：](\\d{2})\\s*[-—~～至]\\s*(\\d{1,2})[:：](\\d{2})")
 
-    /** 网格 -> 课程。找不到课表结构时抛 [IllegalArgumentException]，消息可直接展示。 */
     fun parse(grid: List<List<String?>>): SchoolImport {
         require(grid.isNotEmpty()) { "表格是空的" }
 
-        /* 1. 找星期表头行：同一行里至少两格是星期名。 */
         var headerRow = -1
         var columns: Map<Int, Int> = emptyMap()
         for ((r, line) in grid.withIndex()) {
@@ -41,15 +28,13 @@ object XlsxTimetable {
         }
         require(headerRow >= 0) { "未找到星期表头（需要「星期一」~「星期日」）" }
 
-        /* 2. 逐行找节次，再把该行的课程格子解析成课程。 */
         val courses = mutableListOf<CourseSession>()
         val periods = linkedMapOf<Int, PeriodTime>()
         for (r in headerRow + 1 until grid.size) {
             val line = grid[r]
             if (line.isEmpty()) continue
             val label = line.firstOrNull()?.trim().orEmpty()
-            /* 「备注:」这类整行说明不是课程行。判断放在最前：这类行往往整行只有一格，
-               其中的周次文本会被误当成一门课。 */
+
             if (isNoteRow(line)) continue
             val range = periodRange(label) ?: continue
             val (start, end) = range
@@ -75,15 +60,12 @@ object XlsxTimetable {
         return SchoolImport(courses, periods = periods.values.toList())
     }
 
-    /**
-     * 一个格子可能并排多门课，按周次出现的位置切分，每段一门；切不出课的段直接跳过。
-     */
     private fun parseCell2(text: String, day: Int, start: Int, end: Int): List<CourseSession> {
         val flat = text.replace('\n', ' ').replace('\u00a0', ' ').replace(Regex("\\s+"), " ").trim()
         if (flat.isEmpty()) return emptyList()
         val found = weekExpression.findAll(flat).toList()
         if (found.isEmpty()) return emptyList()
-        /* 每段从上一个周次结束处开始，到本段周次结束处为止。 */
+
         return found.mapIndexedNotNull { index, _ ->
             val from = if (index == 0) 0 else found[index - 1].range.last + 1
             val to = if (index == found.size - 1) flat.length else found[index + 1].range.first
@@ -91,7 +73,6 @@ object XlsxTimetable {
         }
     }
 
-    /** 单段文本 -> 课程；必须恰好一条周次。 */
     private fun parseCell(text: String, day: Int, start: Int, end: Int): CourseSession? {
         val flat = text.replace('\n', ' ').replace('\u00a0', ' ').replace(Regex("\\s+"), " ").trim()
         if (flat.isEmpty()) return null
@@ -124,24 +105,21 @@ object XlsxTimetable {
         )
     }
 
-    /** 从课程文本里找教室：带「楼/室/馆/教」的短片段，或末尾的短词。 */
     private fun locationOf(flat: String): String {
         val tokens = flat.split(' ').map { it.trim() }.filter { it.isNotEmpty() }
         val room = tokens.firstOrNull { it.length in 2..20 && Regex("[楼室馆场教]").containsMatchIn(it) && !Regex("周|节").containsMatchIn(it) }
         return room.orEmpty()
     }
 
-    /** 整行都是说明文字（「备注:」「说明:」或以说明开头且不含星期）时返回 true。 */
     private fun isNoteRow(line: List<String?>): Boolean {
         val texts = line.mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
         if (texts.isEmpty()) return false
         val head = texts.first()
         if (Regex("^(备注|说明|注[:：])").containsMatchIn(head)) return true
-        /* 只有一格内容的行不是课表行（课表行每一列都是独立格子）。 */
+
         return texts.size == 1 && !periodRange(texts.first()).let { it != null }
     }
 
-    /** 节次标签 -> (起, 止)。与 [SchoolParser] 的判定保持一致。 */
     private fun periodRange(label: String): Pair<Int, Int>? {
         slotHint.find(label)?.let { m ->
             val a = m.groupValues[1].toIntOrNull() ?: return@let

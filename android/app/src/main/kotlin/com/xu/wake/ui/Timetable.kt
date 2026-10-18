@@ -55,23 +55,17 @@ import kotlin.math.roundToInt
 
 private val dayNames = listOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
 
-/** Period cell shape. Hoisted to file scope: it used to be rebuilt for every cell of every day. */
 private val gridCellShape = XwakeShapes.rounded(XwakeShapes.small)
 
-/** 左侧节次栏宽度。 */
 private val gutterWidth = 54.dp
 
-/** 单元格宽高比的倒数：行高 = 列宽 * 该系数，缩放时保持比例。 */
 private const val ROW_ASPECT = 0.92f
 
 private const val MIN_ZOOM = 1f
-private const val MAX_ZOOM = 3.4f
+private const val MAX_ZOOM = 2.6f
 
-/** A course already resolved against the theme surface. Depends on composition-local colour, so it
- *  is cached per composition rather than folded into the theme-independent [WeekProjection]. */
 private data class CourseStyle(val background: Color, val ink: Color)
 
-/** One course, resolved against a single week's grid: lane, lane count, and period row span. */
 internal data class PlacedCourse(
     val course: CourseSession,
     val lane: Int,
@@ -80,23 +74,11 @@ internal data class PlacedCourse(
     val endIndex: Int,
 )
 
-/** Immutable projection of one week: the rotated day order plus per-weekday placed courses. */
 internal data class WeekProjection(
     val days: List<Int>,
     val placed: Map<Int, List<PlacedCourse>>,
 )
 
-/**
- * Pure week -> day -> course projection for the timetable grid.
- *
- * Every parameter here is a declared dependency: the composable caches the result with exactly
- * these values as [remember] keys, so a change to any of them must invalidate the cache, and the
- * signature is the list that proves nothing else is read.
- *
- * Lane semantics are kept verbatim from the inline implementation this replaced: a course's lane is
- * its index among the *other* weekday courses whose period span overlaps it, and every course in
- * that overlap group shares the same width divisor. No compaction, no reordering.
- */
 internal fun projectWeek(
     courses: List<CourseSession>,
     week: Int,
@@ -126,7 +108,6 @@ internal fun projectWeek(
     return WeekProjection(days, placed)
 }
 
-/** 分钟数 -> 「08:20」。 */
 internal fun clock(minutes: Int): String =
     (minutes / 60).toString().padStart(2, '0') + ":" + (minutes % 60).toString().padStart(2, '0')
 
@@ -135,41 +116,20 @@ private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaul
     return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
 }
 
-/**
- * 把缩放吸附到「屏幕上正好放下整数列」的档位。
- *
- * 每个天数对应一个档位：放下 n 列时 zoom = 总天数 / n。因此手势结束后看到的永远是完整格子，
- * 不会停在半列上。
- */
 internal fun snapZoom(zoom: Float, dayCount: Int): Float {
     if (dayCount <= 0) return MIN_ZOOM
     val visible = (dayCount / zoom).roundToInt().coerceIn(1, dayCount)
     return (dayCount.toFloat() / visible).coerceIn(MIN_ZOOM, MAX_ZOOM)
 }
 
-/** 吸附偏移到整格边界，并夹在内容范围内。 */
 internal fun snapOffset(offset: Float, cell: Float, viewport: Float, content: Float): Float {
     val max = (content - viewport).coerceAtLeast(0f)
     if (max <= 0f) return 0f
     return (offset / cell).roundToInt().toFloat().times(cell).coerceIn(0f, max)
 }
 
-/** 顶栏下方星期表头的高度。 */
-private val dayHeaderHeight = 44.dp
+private val dayHeaderHeight = 38.dp
 
-/**
- * 课表页。
- *
- * 视图周与配置周是两件事：[viewWeek] 只是本次浏览到哪一周，翻周不会写回设置；
- * 设置里的「当前周」是固定的锚点，定位按钮就是回到它。
- *
- * 手势集中在一处：单指拖动滚表，双指捏合缩放，拖到左右边界后继续拖即切换周。
- * 手势结束一律吸附——缩放吸到「屏幕上放下整数列」的档位，偏移吸到整格边界。
- *
- * 所有日期由 [WeekDates] 从开学日期推算，表头日期、周区间标签共用同一套换算。
- *
- * @param onImmersive 沉浸状态变化：用户向下滚动时为 true，调用方据此隐藏底栏与系统栏。
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun Timetable(
@@ -207,7 +167,6 @@ fun Timetable(
     val headerPx = with(density) { dayHeaderHeight.toPx() }
     val week = viewWeek.coerceIn(1, s.weekCount)
 
-    /* 切周过渡：新一周从行进方向滑入并淡入。幅度取屏宽的一小段而非整屏，配合吸附一起看更稳。 */
     val slide = remember { androidx.compose.animation.core.Animatable(0f) }
     var slideFrom by remember { mutableIntStateOf(week) }
 
@@ -229,7 +188,6 @@ fun Timetable(
     val maxX = (cellW * dayCount - availW).coerceAtLeast(0f)
     val maxY = (cellH * periodCount - availH).coerceAtLeast(0f)
 
-    /** 手势结束后的吸附：先定缩放档位，再把偏移吸到整格。 */
     fun applySnap() {
         val targetZoom = snapZoom(zoom, dayCount)
         val cw = availW / dayCount * targetZoom
@@ -259,7 +217,6 @@ fun Timetable(
         slide.animateTo(0f, tween(durationMillis = snapMillis, easing = XwakeMotion.emphasizedEasing))
     }
 
-    /* 编辑模式下返回键先退出编辑，而不是直接离开课表页。 */
     BackHandler(enabled = editMode) { onEditMode(false) }
 
     val dragThreshold = with(density) { 52.dp.toPx() }
@@ -281,7 +238,7 @@ fun Timetable(
                         )
                     }
                 } else {
-                    /* 点按或长按周次都打开选周面板；长按是主路径，点按让它可被发现。 */
+
                     Column(
                         Modifier.fillMaxWidth().combinedClickable(
                             onClick = { pickerOpen = true },
@@ -302,7 +259,7 @@ fun Timetable(
                 if (editMode) {
                     TextButton(onClick = { onEditMode(false) }) { Text("完成") }
                 } else {
-                    /* 只有翻离当前周时才出现，避免平时占位。 */
+
                     if (week != s.currentWeek) {
                         AssistChip(
                             onClick = { onViewWeek(s.currentWeek) },
@@ -347,7 +304,7 @@ fun Timetable(
                     .fillMaxSize()
                     .clipToBounds()
                     .onSizeChanged { boxW = it.width; viewportH = it.height }
-                    /* 空白处长按进入排课编辑；有课的地方由卡片自己处理长按。 */
+
                     .pointerInput(editMode) {
                         detectTapGestures(onLongPress = { if (!editMode) onEditMode(true) })
                     }
@@ -384,8 +341,8 @@ fun Timetable(
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
-                            /* 拖过左右边界足够远 -> 切周并回到整列；否则吸附回整格。 */
-                            /* 编辑模式下不定周：拖动是排课，不是翻周。 */
+
+
                             if (!editMode && abs(edgePull) > dragThreshold) {
                                 offsetX = 0f
                                 onViewWeek((week + if (edgePull < 0) 1 else -1).coerceIn(1, s.weekCount))
@@ -403,10 +360,10 @@ fun Timetable(
                         alpha = (1f - abs(slide.value) * 2.2f).coerceIn(0f, 1f)
                     },
                 ) {
-                    /* 节次栏固定在左侧，只随纵向滚动。 */
+
                     Column(Modifier.width(gutterWidth)) {
                         Spacer(Modifier.height(dayHeaderHeight))
-                        /* 偏移只作用于标签本身：连同上面的占位一起偏移会让它与固定表头错位。 */
+
                         Column(Modifier.graphicsLayer { translationY = -offsetY }) {
                             s.periods.forEach { pr ->
                                 Box(
@@ -426,8 +383,7 @@ fun Timetable(
                                                 fontSize = 9.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
-                                            /* 下一节紧接着开始时，这个结束时间与它的开始时间相同，
-                                               重复显示只会让左栏变吵。 */
+
                                             val nextStart = s.periods.getOrNull(s.periods.indexOf(pr) + 1)?.startMinutes
                                             if (pr.endMinutes != nextStart) {
                                                 Text(
@@ -444,7 +400,7 @@ fun Timetable(
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        /* 星期与日期：随横向滚动，不随纵向滚动。 */
+
                         Row(Modifier.graphicsLayer { translationX = -offsetX }) {
                             projection.days.forEach { day ->
                                 val date = WeekDates.on(s.start, week, day)
@@ -507,10 +463,7 @@ fun Timetable(
                                                     if (located) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, gridCellShape)
                                                     else Modifier
                                                 )
-                                            /* 字号随列宽走：7 天自适应后每列只有几十 dp，
-                                               固定字号会把中文逐字换行。 */
-                                            /* 中文字宽约等于字号本身，按「一列约放下 4 个字」反推，
-                                               否则固定字号会把课名逐字换行。 */
+
                                             val cardDp = with(density) { cellW.toDp().value }
                                             val cardSize = (cardDp / 4.2f).coerceIn(8f, 15f).sp
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
@@ -556,7 +509,6 @@ fun Timetable(
     }
 }
 
-/** 横向一排的选周面板；当前周与正在浏览的周各自有标记。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeekPickerSheet(

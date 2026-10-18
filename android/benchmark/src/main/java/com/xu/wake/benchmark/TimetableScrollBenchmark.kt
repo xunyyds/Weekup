@@ -12,16 +12,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Frame timing while the timetable is scrolled.
- *
- * The timetable is the drawing-heavy surface: every cell is a composable box, course cards are
- * layered on top of the grid with offsets, and the header collapses while scrolling. That makes it
- * the screen where jank would actually be noticed — hence a dedicated benchmark rather than
- * folding it into startup.
- *
- * Requires the seeded state (see [SeedTimetable]).
- */
 @LargeTest
 @RunWith(AndroidJUnit4::class)
 class TimetableScrollBenchmark {
@@ -29,7 +19,6 @@ class TimetableScrollBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** Down, then back up: both directions pay for the collapsing header and the card re-layout. */
     @Test
     fun scrollTimetable() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -48,10 +37,6 @@ class TimetableScrollBenchmark {
         }
     }
 
-    /**
-     * Horizontal swiping between weeks — the gesture the timetable wires through
-     * `detectHorizontalDragGestures`, so it exercises a different code path than vertical scrolling.
-     */
     @Test
     fun swipeWeeks() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -77,7 +62,6 @@ class TimetableScrollBenchmark {
         device.waitForIdle()
     }
 
-    /** Horizontal drag past the 100 px threshold the timetable uses to switch weeks. */
     private fun androidx.test.uiautomator.UiDevice.swipeWeek(next: Boolean) {
         val y = displayHeight / 2
         val from = if (next) displayWidth * 3 / 4 else displayWidth / 4

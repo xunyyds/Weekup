@@ -14,14 +14,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Frame timing of the full-screen search: open, type, browse results.
- *
- * Search is the interaction with the most work behind a single keystroke — the palette is scored,
- * the result list re-renders and the shared element morphs — so it gets its own benchmark. The
- * three tests split the cost by phase; comparing them tells you whether a regression sits in the
- * open transition, the query path or the result list itself.
- */
 @LargeTest
 @RunWith(AndroidJUnit4::class)
 class SearchBenchmark {
@@ -29,7 +21,6 @@ class SearchBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** Only the pill → full-screen morph, with no query typed. */
     @Test
     fun openSearch() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -44,7 +35,6 @@ class SearchBenchmark {
         device.waitForIdle()
     }
 
-    /** One character at a time through the real query path. */
     @Test
     fun typeQuery() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -58,7 +48,6 @@ class SearchBenchmark {
         device.typeInto(BenchmarkTarget.SEARCH_FIELD, BenchmarkTarget.SEARCH_QUERY)
     }
 
-    /** Scrolling the result list after a query that matches many entries. */
     @Test
     fun scrollResults() = benchmarkRule.measureRepeated(
         packageName = BenchmarkTarget.PACKAGE,
@@ -76,12 +65,6 @@ class SearchBenchmark {
         }
     }
 
-    /**
-     * Navigates settings → search and waits for the field.
-     *
-     * The search entry point lives on the settings page, so every iteration pays for one dock tap
-     * first; that cost is identical across iterations and therefore part of the measured baseline.
-     */
     private fun androidx.benchmark.macro.MacrobenchmarkScope.openSearchScreen() {
         startActivityAndWait()
         device.clickText(BenchmarkTarget.TAB_SETTINGS)

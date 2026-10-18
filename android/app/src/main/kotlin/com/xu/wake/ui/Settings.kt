@@ -31,7 +31,6 @@ import com.xu.wake.ui.search.XwakeSearchPill
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 
-                                                           
 private enum class Route(val key: String) {
     Root("root"),
     Appearance("appearance"),
@@ -73,12 +72,11 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(appBarState)
 
     val atRoot = current == Route.Root
-    // A search result opens its route, then asks the page to spotlight the matching row.
+
     LaunchedEffect(highlightRequest) {
         if (highlightRequest == null) return@LaunchedEffect
         highlighted = highlightRequest
-        /* Clear after the bring-into-view has settled, so the highlight marks where you landed
-           instead of staying on the row for every later visit. */
+
         delay(1600)
         if (highlighted == highlightRequest) highlighted = null
     }
@@ -110,8 +108,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
         topBar={
             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).then(if(atRoot) Modifier.navigationBarsPadding() else Modifier)) {
                 if(atRoot) {
-                    /* 展开高度从 152dp 收到 58dp，并自带状态栏内边距——此前 windowInsets 被清零，
-                       标题直接画到状态栏底下。 */
+
                     XwakeTopBar(
                         title = "设置",
                         collapseFraction = scrollBehavior.state.collapsedFraction,
@@ -184,7 +181,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                     SettingsTarget("课表密度") {
                         Text("课表密度 · ${(densityDraft*100).toInt()}%",Modifier.padding(18.dp))
                         Slider(densityDraft,{densityDraft=it},onValueChangeFinished={update { s.copy(density=densityDraft.toDouble()) }},valueRange=.6f..1.6f,steps=19,modifier=Modifier.padding(horizontal=18.dp))
-                        /* 阈值预设：拖动是连续值，预设给几个确定档位，省得反复微调。 */
+
                         Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             listOf(.7f to "紧凑",.85f to "标准",1f to "宽松",1.2f to "大格").forEach { (preset,label) ->
                                 FilterChip(
@@ -250,7 +247,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                         },
                         confirmButton = {
                             TextButton(onClick = {
-                                /* 有课程占用的节次不能减掉，否则课表的节次引用会失效。 */
+
                                 val maxUsed = data.courses.maxOfOrNull { it.endPeriod } ?: 0
                                 if (periodDraft < maxUsed) {
                                     periodError = "第 " + maxUsed + " 节已有课程，不能减到 " + periodDraft + " 节"
@@ -323,7 +320,6 @@ private val Route.title: String
         Route.About -> "关于 xwake"
     }
 
-                                                            
 private val Route.parent: Route
     get() = when (this) {
         Route.Root -> Route.Root
@@ -331,8 +327,6 @@ private val Route.parent: Route
         Route.Calendar, Route.Week -> Route.Semester
         Route.Appearance, Route.Semester, Route.Courses, Route.Reminders, Route.Data, Route.About -> Route.Root
     }
-
-
 
 private val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
 

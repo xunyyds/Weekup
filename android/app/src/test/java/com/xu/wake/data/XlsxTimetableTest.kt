@@ -6,7 +6,6 @@ import org.junit.Test
 
 class XlsxTimetableTest {
 
-    /** 典型教务导出布局：首行星期表头，首列节次，格子内含课程与周次。 */
     private fun grid(): List<List<String?>> = listOf(
         listOf("节次", "星期一", "星期二", "星期三", "星期四", "星期五"),
         listOf("第一二节 08:20-10:00", "JAVA程序设计基础 6-19周 致广楼313", "思想道德与法治 5-16周 知新楼508", null, null, null),
@@ -31,7 +30,7 @@ class XlsxTimetableTest {
         val periods = XlsxTimetable.parse(grid()).periods
         val first = periods.first { it.period == 1 }
         assertEquals(8 * 60 + 20, first.startMinutes)
-        /* 第一二节共用 08:20-10:00，均分后第二节到 10:00 */
+
         val second = periods.first { it.period == 2 }
         assertEquals(10 * 60, second.endMinutes)
     }

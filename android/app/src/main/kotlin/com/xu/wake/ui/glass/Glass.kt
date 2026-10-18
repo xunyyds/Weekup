@@ -67,12 +67,8 @@ fun Modifier.glassSource(): Modifier {
                                                                                                    
                                                                                                
    
-/**
- * Lightweight frosted-glass approximation for the SDK<33 path and for surfaces that only need
- * depth. Tints the fallback toward the surrounding surface and adds one faint top-edge highlight so
- * the layer still reads as glass without a shader. All values are computed once per size change in
- * the draw lambda, so nothing allocates per frame.
- */
+
+
 @Composable
 internal fun Modifier.softGlass(
     radiusDp: Float,
@@ -133,8 +129,8 @@ private class AndroidLens {
     private var cached: androidx.compose.ui.graphics.RenderEffect? = null
 
     fun effect(width: Float, height: Float, radius: Float, margin: Float): androidx.compose.ui.graphics.RenderEffect {
-        /* The draw lambda runs every frame; rebuilding the chain there allocated two RenderEffects
-           per glass surface per frame. The geometry only changes on resize, so cache on it. */
+
+
         val key = (((width * 4).toLong() and 0xFFFF) shl 48) or
             (((height * 4).toLong() and 0xFFFF) shl 32) or
             (((radius * 4).toLong() and 0xFFFF) shl 16) or
@@ -160,28 +156,12 @@ private class AndroidLens {
     }
 }
 
-/*
- * Copyright 2025 Kyant
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- * Unless required by applicable law or agreed to in writing, software distributed under the
- * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions
- * and limitations under the License.
- *
- * Modified for Xwake: single-radius SDF, safe zero-gradient handling, padded coordinates,
- * directional edge highlight combined with lens; no dispersion or multiplatform dependencies.
- * Source: Kyant0/AndroidLiquidGlass, commit 65ab177e90e5c1d8c62e70cf7755841982da65f6,
- * backdrop/src/commonMain/kotlin/com/kyant/backdrop/internal/Shaders.kt.
- */
-/**
- * Fixed blur radius for the lens backdrop. Fixed rather than proportional to the surface: a blur is
- * created on every draw pass, and a constant keeps each layer identical across frames and sizes.
- */
-/* Glass strength. The dock reads as "liquid" only when the backdrop is clearly blurred, clearly
- * bent at the edges, and clearly lit along the rim; the previous 7f/0.12 read as a plain translucent
- * card and was indistinguishable from the floating style. */
+
+
+
+
+
+
 private const val BlurRadius = 16f
 private const val DepthRatio = 0.34f
 private const val RefractionRatio = 0.20f

@@ -134,9 +134,8 @@ class BootReceiver : BroadcastReceiver() {
 }
 
 private object ReceiverWorker {
-    /* Deliberately single-threaded: sync() cancels every alarm and then re-arms them, so two
-       concurrent syncs would interleave cancels with sets and leave stale alarms behind.
-       Do not turn this into a pool. */
+
+
     private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "xwake-reminders") }
     fun execute(task: () -> Unit) { executor.execute(task) }
 }

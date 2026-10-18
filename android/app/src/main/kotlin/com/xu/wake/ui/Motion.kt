@@ -50,29 +50,20 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collect
 
-// ---------------------------------------------------------------------------------------------
-// Design tokens
-//
-// OriginOS-flavoured layering: three corner tiers (24 / 28 / 32) that always nest inward by a
-// fixed inset, an 8dp spacing scale with 4dp half-steps, and soft low-alpha shadows instead of
-// the hard default elevation. Every visual constant in the UI layer should reference these.
-// ---------------------------------------------------------------------------------------------
-
 object XwakeShapes {
-    /** Hairline rounding: chips, swatches, progress tracks. */
+
     val hairline = 2.dp
     val tiny = 4.dp
     val xs = 8.dp
     val small = 12.dp
     val medium = 16.dp
-    /** Primary card tier (Section surface, PressCard, tab pill). */
+
     val card = 24.dp
-    /** Sheet / dialog / large container tier. */
+
     val sheet = 28.dp
-    /** Floating dock tier. */
+
     val dock = 32.dp
 
-    /** Corner radius of a surface nested inside [radius] with [inset] padding. */
     fun nested(radius: Dp, inset: Dp): Dp = (radius - inset).coerceAtLeast(tiny)
 
     fun rounded(radius: Dp): Shape = RoundedCornerShape(radius)
@@ -81,7 +72,7 @@ object XwakeShapes {
 object XwakeSpacing {
     val hairline = 2.dp
     val xs = 4.dp
-    /** Base unit of the spacing scale. */
+
     val sm = 8.dp
     val md = 12.dp
     val lg = 16.dp
@@ -95,11 +86,6 @@ object XwakeElevation {
     val floating = 10.dp
     val dock = 14.dp
 
-    /**
-     * Soft, deliberately faint shadow. Android's default elevation shadow is opaque and hard
-     * edged; tinting the ambient/spot colours down to single-digit alpha keeps the depth cue
-     * without the "sticker" look.
-     */
     fun soft(
         elevation: Dp,
         shape: Shape,
@@ -115,24 +101,22 @@ object XwakeElevation {
 }
 
 object XwakeMotion {
-    /** Durations in milliseconds, before the user's motion-speed multiplier. */
+
     const val fast = 120
     const val quick = 180
     const val standard = 260
     const val emphasized = 320
     const val slow = 420
 
-    /** Stagger entrance: per-item delay and the point where the cascade stops growing. */
     const val staggerStep = 32
     const val staggerMax = 8
-    /** Vertical rise of a staggered list item, in dp. */
+
     const val staggerRise = 10
 
-    /** Material 3 standard easing. */
     val standardEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    /** Material 3 emphasized-decelerate: the expressive "arrive fast, settle slow" curve. */
+
     val emphasizedEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
-    /** Material 3 emphasized-accelerate, for exits. */
+
     val accelerateEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     val legacyEasing = FastOutSlowInEasing
 }
@@ -141,20 +125,14 @@ private val LocalXwakeMotionEnabled = staticCompositionLocalOf<Boolean?> { null 
 private val LocalMotionSpeed = staticCompositionLocalOf { 1.0 }
 private val LocalTransitionStyle = staticCompositionLocalOf { "shared" }
 
-/** Scales a base duration by the user's motion-speed setting. */
 @Composable
 internal fun xwakeMillis(base: Int): Int =
     (base / LocalMotionSpeed.current).toInt().coerceAtLeast(1)
 
-/** Entry delay for the item at [index] in a staggered list. */
 @Composable
 internal fun xwakeStaggerDelay(index: Int): Int =
     xwakeMillis(XwakeMotion.staggerStep * index.coerceIn(0, XwakeMotion.staggerMax))
 
-/**
- * Tracks whether the platform currently allows animation. Both the system animator scale and the
- * Compose [MotionDurationScale] must be non-zero.
- */
 @Composable
 private fun systemMotionEnabled(): Boolean {
     val resolver = LocalContext.current.contentResolver
@@ -188,11 +166,6 @@ private fun systemMotionEnabled(): Boolean {
 internal fun xwakeMotionEnabled(): Boolean =
     LocalXwakeMotionEnabled.current ?: systemMotionEnabled()
 
-// ---------------------------------------------------------------------------------------------
-// Theme
-// ---------------------------------------------------------------------------------------------
-
-/** Neutral surfaces, an explicit tonal ladder, and hue-matched outlines for both schemes. */
 private fun darkScheme() = darkColorScheme(
     primary = Color(0xFF91B7FF),
     onPrimary = Color(0xFF092D61),
@@ -256,8 +229,7 @@ fun XwakeTheme(
         "teal" -> Color(0xFF167F86)
         else -> Color(0xFF2869D8)
     }
-    // Light-mode seeds are pulled 12% toward black: every palette then clears 4.5:1 for both
-    // white-on-primary fill and primary-as-body-text on the tonal surfaces.
+
     val seed = if (dark) rawSeed else lerp(rawSeed, Color.Black, .12f)
     val effectiveScheme = if (dynamicColor && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(LocalContext.current) else dynamicLightColorScheme(LocalContext.current)
@@ -283,14 +255,6 @@ fun XwakeTheme(
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Page transitions
-//
-// Three styles keep their semantic: "standard" = full shared-axis travel, "shared" = the tight
-// default used between top-level pages, "fade" = cross dissolve without displacement. Only the
-// curves and durations changed: M3 emphasized-decelerate on entry, emphasized-accelerate on exit.
-// ---------------------------------------------------------------------------------------------
-
 @Composable
 fun MotionContent(
     target: String,
@@ -315,11 +279,7 @@ fun MotionContent(
                 else -> {
                     val direction = if (targetState >= initialState) 1 else -1
                     val travel = if (style == "standard") .12f else .06f
-                    /* The incoming page fades in faster than the outgoing one fades out, so the two
-                       layers are never both mid-opacity for long: that overlap is what read as a
-                       ghost/double image. Exit is deliberately shorter than enter for the same
-                       reason, and the incoming layer clips its own bounds so a sliding page cannot
-                       paint outside the frame while the swap is in flight. */
+
                     val enter = slideInHorizontally(
                         tween(enterMillis, easing = XwakeMotion.emphasizedEasing),
                     ) { (it * travel * direction).toInt() } +

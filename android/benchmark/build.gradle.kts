@@ -1,10 +1,3 @@
-// Macrobenchmark host module — see README.md for the on-device workflow.
-//
-// This module holds no product code: it is the instrumentation APK that measures the
-// `:app` target. The test build type must be named exactly like the app's measurement
-// build type (`benchmark`) so the two variants pair up, and it must stay debuggable
-// because Macrobenchmark requires a debuggable *test* APK — the *target* app is the
-// one that must be non-debuggable and profileable.
 plugins {
     id("com.android.test")
     id("org.jetbrains.kotlin.android")
@@ -25,10 +18,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Measure the sibling `:app` module, not a copy of it.
     targetProjectPath = ":app"
-    // Self-instrumenting: the benchmark runs inside the instrumented process of this
-    // module's own APK, which is what lets it reset / profile the target app.
+
     experimentalProperties["android.experimental.self-instrumenting"] = true
 
     buildTypes {

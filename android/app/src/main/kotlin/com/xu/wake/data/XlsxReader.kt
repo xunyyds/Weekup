@@ -6,27 +6,12 @@ import java.io.InputStream
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.SAXParserFactory
 
-/**
- * 读取 .xlsx（Office Open XML）的最小实现。
- *
- * xlsx 是一个 zip：工作表在 `xl/worksheets/sheet1.xml`，字符串常量在 `xl/sharedStrings.xml`。
- * 两者都是 XML，用 JDK 自带的 [ZipInputStream] 与 SAX 即可解析，不必引入 Apache POI
- * （体积与方法数都远超本应用需要）。
- *
- * 只做一件事：把第一张工作表还原成按行优先的稀疏网格，缺失格子为 null。
- * 合并单元格、样式、公式一律忽略。
- */
 object XlsxReader {
 
     private const val MAX_ENTRY_BYTES = 16 * 1024 * 1024
     private const val MAX_ROWS = 4096
     private const val MAX_COLS = 256
 
-    /**
-     * 解析 xlsx。
-     *
-     * @throws IllegalArgumentException 不是有效的 xlsx 时抛出，消息可直接展示给用户。
-     */
     fun read(input: InputStream): List<List<String?>> {
         var shared: List<String> = emptyList()
         var sheet: ByteArray? = null
@@ -58,7 +43,6 @@ object XlsxReader {
         return out.toByteArray()
     }
 
-    /** `xl/sharedStrings.xml`：每个 `<si>` 是一个字符串，可能由多个 `<t>` 片段组成。 */
     private fun sharedStrings(bytes: ByteArray): List<String> {
         val out = mutableListOf<String>()
         var current: StringBuilder? = null
@@ -78,7 +62,6 @@ object XlsxReader {
         return out
     }
 
-    /** 工作表：`<row r=..><c r="B3" t="s"><v>12</v></c></row>`，`t="s"` 时 v 是 sharedStrings 下标。 */
     private fun parseSheet(bytes: ByteArray, shared: List<String>): List<List<String?>> {
         val grid = mutableListOf<MutableList<String?>>()
         var rowIndex = -1
@@ -132,7 +115,6 @@ object XlsxReader {
         line[col] = value
     }
 
-    /** `B12` -> 0 基列号；非法引用返回 null。 */
     private fun columnOf(ref: String?): Int? {
         if (ref.isNullOrBlank()) return null
         var value = 0
@@ -147,9 +129,6 @@ object XlsxReader {
         return if (letters == 0) null else value - 1
     }
 
-    /* 用 SAX 而不是 android.util.Xml / XmlPullParserFactory：后者依赖 Android 桩实现，
-       在 `unitTests.isReturnDefaultValues = true` 的单元测试里返回 null。SAX 是 JDK 标准实现，
-       设备与测试环境行为一致。 */
     private fun sax(bytes: ByteArray) = SAXParserFactory.newInstance().apply {
         isNamespaceAware = false
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)

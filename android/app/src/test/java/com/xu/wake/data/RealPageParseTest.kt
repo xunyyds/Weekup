@@ -4,14 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * 用真实抓取的页面结构做回归。
- *
- * 登录后首页同时存在「课表预览小部件」（课名截断、无周次）与用户打开的理论课表，
- * 提取脚本会把两张表一起交出来，解析器必须挑出真正的那张。
- *
- * 夹具已去除学校、楼名与个人信息。
- */
 class RealPageParseTest {
 
     private fun page(): String {
@@ -30,7 +22,6 @@ class RealPageParseTest {
         assertEquals(2, java.endPeriod)
     }
 
-    /** 教室取站点标注的「教室」，而不是块尾的「(讲课:56)」这类附注。 */
     @Test fun roomComesFromTheLabelledField() {
         val java = SchoolParser.parse(page()).courses.first { it.name.contains("JAVA") }
         assertEquals("A栋313", java.location)

@@ -10,19 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
-/**
- * Guards the pure week projection that replaced the inline per-recomposition grid maths.
- *
- * [legacyProjectWeek] is a verbatim copy of the code Timetable.kt used to run inside the composition
- * (lines 60-77 before the change). It is the oracle: every assertion compares the remembered,
- * precomputed projection against it, so a "clever" refactor that silently changes lane assignment,
- * day ordering or period row spans fails here instead of on a device.
- */
 class TimetableProjectionTest {
-
-    // -------------------------------------------------------------------------------------------
-    // Oracle: the pre-optimisation inline implementation, kept literally as it was.
-    // -------------------------------------------------------------------------------------------
 
     private data class LegacyPlaced(
         val course: CourseSession,
@@ -67,10 +55,6 @@ class TimetableProjectionTest {
         }
     }
 
-    // -------------------------------------------------------------------------------------------
-    // Fixtures
-    // -------------------------------------------------------------------------------------------
-
     private val settings = AppSettings(periods = defaultDayPeriods(), weekCount = 20)
 
     private fun course(
@@ -89,10 +73,6 @@ class TimetableProjectionTest {
         location = "教学楼",
     )
 
-    // -------------------------------------------------------------------------------------------
-    // Purity
-    // -------------------------------------------------------------------------------------------
-
     @Test
     fun projectionIsPure() {
         val courses = listOf(
@@ -104,14 +84,9 @@ class TimetableProjectionTest {
         val second = project(courses, 2, settings)
         assertEquals("same inputs must produce an equal structure", first, second)
         assertEquals(first.placed, second.placed)
-        // A third call from a fresh argument list (structurally equal, not identical) must also match:
-        // the function may not depend on reference identity.
+
         assertEquals(first, project(courses.toList(), 2, settings))
     }
-
-    // -------------------------------------------------------------------------------------------
-    // No overlap: one course per cell
-    // -------------------------------------------------------------------------------------------
 
     @Test
     fun nonOverlappingCoursesEachGetLaneZero() {
@@ -126,14 +101,10 @@ class TimetableProjectionTest {
             assertEquals("lane of ${pc.course.id}", 0, pc.lane)
             assertEquals("laneCount of ${pc.course.id}", 1, pc.laneCount)
         }
-        // Row spans come from the period table, not from the period numbers.
+
         assertEquals(listOf(0, 2, 8), placed.map { it.startIndex })
         assertEquals(listOf(1, 3, 9), placed.map { it.endIndex })
     }
-
-    // -------------------------------------------------------------------------------------------
-    // Three-way overlap
-    // -------------------------------------------------------------------------------------------
 
     @Test
     fun threeWayOverlapGetsLanesZeroOneTwo() {
@@ -145,7 +116,7 @@ class TimetableProjectionTest {
         val placed = project(courses, 1, settings).placed.getValue(2)
         assertEquals(listOf(0, 1, 2), placed.map { it.lane })
         assertEquals(listOf(3, 3, 3), placed.map { it.laneCount })
-        // Sorting is by startPeriod, so lane order follows start order regardless of input order.
+
         assertEquals(listOf("a", "b", "c"), placed.map { it.course.id })
         assertEquals(
             listOf("a", "b", "c"),
@@ -155,7 +126,7 @@ class TimetableProjectionTest {
 
     @Test
     fun partialOverlapDoesNotSpreadToTheWholeDay() {
-        // a/b overlap, c is later and alone: it keeps laneCount 1 so it stays full width.
+
         val courses = listOf(
             course("a", 4, 1, 2),
             course("b", 4, 2, 3),
@@ -165,10 +136,6 @@ class TimetableProjectionTest {
         assertEquals(listOf(0, 1, 0), placed.map { it.lane })
         assertEquals(listOf(2, 2, 1), placed.map { it.laneCount })
     }
-
-    // -------------------------------------------------------------------------------------------
-    // Cross-week courses
-    // -------------------------------------------------------------------------------------------
 
     @Test
     fun crossWeekCourseOnlyAppearsInItsWeeks() {
@@ -195,10 +162,6 @@ class TimetableProjectionTest {
         projection.placed.values.forEach { assertTrue(it.isEmpty()) }
     }
 
-    // -------------------------------------------------------------------------------------------
-    // Day ordering (rotated week start)
-    // -------------------------------------------------------------------------------------------
-
     @Test
     fun dayOrderFollowsWeekStart() {
         val rotated = AppSettings(firstDay = 1, lastDay = 7, weekStart = 3, periods = defaultDayPeriods())
@@ -206,10 +169,6 @@ class TimetableProjectionTest {
         assertEquals(listOf(1, 2, 3, 4, 5), project(emptyList(), 1, AppSettings(firstDay = 1, lastDay = 5, weekStart = 1, periods = defaultDayPeriods())).days)
         assertMatchesOracle(emptyList(), 1, rotated)
     }
-
-    // -------------------------------------------------------------------------------------------
-    // Equivalence against the oracle on realistic and randomised data
-    // -------------------------------------------------------------------------------------------
 
     @Test
     fun matchesLegacyOnRealisticTimetable() {
@@ -249,10 +208,6 @@ class TimetableProjectionTest {
         }
     }
 
-    // -------------------------------------------------------------------------------------------
-    // Cost: the whole point of the change is that this runs once per week instead of per frame.
-    // -------------------------------------------------------------------------------------------
-
     @Test
     fun projectionIsCheapEnoughToCache() {
         val courses = AppData(
@@ -263,7 +218,7 @@ class TimetableProjectionTest {
             },
         ).courses
         val week = 7
-        // Recomposition count for one dwell on a week: scroll, press feedback, page transition frames.
+
         val recompositions = 60
 
         fun recomposedWithProjection(): Long {
@@ -278,7 +233,6 @@ class TimetableProjectionTest {
             return sink.toLong()
         }
 
-        // remember(...) on the same key set: one projection, the rest are cache hits.
         fun recomposedWithRemember(): Long {
             val cache = HashMap<List<Any>, WeekProjection>()
             var sink = 0
@@ -289,7 +243,6 @@ class TimetableProjectionTest {
             return sink.toLong()
         }
 
-        // Warm up so the JIT has compiled every path before anything is timed.
         repeat(3) { recomposedWithProjection(); recomposedWithLegacyInline(); recomposedWithRemember() }
 
         fun time(block: () -> Long): Pair<Long, Long> {

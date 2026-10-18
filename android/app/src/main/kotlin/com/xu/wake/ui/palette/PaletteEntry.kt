@@ -3,7 +3,6 @@ package com.xu.wake.ui.palette
 import com.xu.wake.data.AppData
 import com.xu.wake.data.CourseSession
 
-                                                             
 enum class PaletteKind(val label: String) {
     Course("课程"),
     Setting("设置"),
@@ -12,12 +11,6 @@ enum class PaletteKind(val label: String) {
 
 val paletteKindOrder: List<PaletteKind> = listOf(PaletteKind.Course, PaletteKind.Setting, PaletteKind.Action)
 
-                                     
-                                                                             
-                                                                             
-                                                                                 
-                                                                              
-                                      
 data class PaletteEntry(
     val id: String,
     val kind: PaletteKind,
@@ -27,7 +20,6 @@ data class PaletteEntry(
     val payload: String = "",
 )
 
-                                              
 object PaletteActions {
     const val NEW_COURSE = "new-course"
     const val EDIT_PERIODS = "edit-periods"
@@ -40,9 +32,6 @@ object PaletteActions {
 
 private data class SettingSeed(val title: String, val route: String, val path: String, val keywords: String = "")
 
-                                                                                     
-                                                                                    
-                                                                              
 private val paletteSettings: List<SettingSeed> = listOf(
     SettingSeed("外观", "appearance", "设置 · 外观", "主题 莫奈 底栏 布局"),
     SettingSeed("明暗模式", "appearance", "外观", "深色 浅色 跟随系统 黑暗 夜间"),
@@ -82,7 +71,6 @@ private val paletteSettings: List<SettingSeed> = listOf(
     SettingSeed("分享应用", "root", "设置", "APK 安装包"),
 )
 
-                                                                                      
 val paletteActions: List<PaletteEntry> = listOf(
     PaletteEntry(
         id = "action:" + PaletteActions.NEW_COURSE, kind = PaletteKind.Action, title = "新增课程",
@@ -125,8 +113,6 @@ private fun courseSubtitle(course: CourseSession): String {
     return parts.joinToString(" · ")
 }
 
-                                                        
-                                                                                  
 fun courseEntries(courses: List<CourseSession>): List<PaletteEntry> = courses.map { course ->
     PaletteEntry(
         id = "course:${course.id}",
