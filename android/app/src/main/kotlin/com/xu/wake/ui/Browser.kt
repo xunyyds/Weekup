@@ -108,8 +108,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
            declaration, and this effect has to sit with the other effects. */
         browser.settings.apply {
             userAgentString = if (desktopMode) DESKTOP_CHROME_UA else null
-            useWideViewPort = true
-            loadWithOverviewMode = desktopMode
+            useWideViewPort = false
+            loadWithOverviewMode = needsOverviewScale(browser.url.orEmpty())
         }
         browser.setInitialScale(0)
     }
@@ -146,23 +146,15 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     fun applyViewportScript(browser: WebView, desktop: Boolean) {
         val page = browser.url.orEmpty()
         if (!schoolWebUrl(page)) return
-        /* Overview scaling is a WebView-level setting, so it cannot stay on for every page: it
-           rescales whatever is loaded, which squeezed the post-sign-on pages into a strip. The
-           viewport script reports whether this page is a fixed-width sign-on canvas; overview
-           mode then follows that answer instead of the mode toggle alone. */
+        /* These scripts only adjust the document. They must NOT touch WebView settings:
+           loadWithOverviewMode cannot be changed after a page has laid out, because switching it
+           forces a re-layout against a different viewport, and pages whose height:100% chain
+           depends on the original viewport collapse to zero height. The mode is therefore fixed
+           before loading (see the loadUrl sites), not here. */
+        if (desktop) browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
         browser.evaluateJavascript(CAS_FIT_SCRIPT, null)
-        if (!desktop) {
-            browser.settings.loadWithOverviewMode = false
-            return
-        }
-        browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT) { result ->
-            if (!lifetime.alive) return@evaluateJavascript
-            /* 'fixed' = fixed-width page: keep the wide canvas and overview scaling.
-               'skip' = ordinary page: drop overview scaling and let its own viewport apply. */
-            val fixedWidth = result.orEmpty().contains("fixed")
-            browser.settings.loadWithOverviewMode = fixedWidth
-            if (!fixedWidth) browser.setInitialScale(0)
-        }
+        /* Pages built on vh-size boxes collapse to zero height on this WebView; repair them. */
+        browser.evaluateJavascript(VH_HEIGHT_REPAIR_SCRIPT, null)
     }
     
     fun applyMode(browser: WebView, desktop: Boolean) {
@@ -174,8 +166,9 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                out correctly at a desktop-ish width, so ask for a wide viewport and let overview
                mode scale the finished layout down to the screen. In mobile mode the page's own
                meta viewport should drive layout instead, so overview stays off there. */
-            useWideViewPort = true
-            loadWithOverviewMode = desktop
+            useWideViewPort = false
+            /* Fixed before load: flipping this after layout collapses height:100% pages. */
+            loadWithOverviewMode = needsOverviewScale(browser.url.orEmpty())
         }
         browser.setInitialScale(0)
         applyViewportScript(browser, desktop)
@@ -288,6 +281,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                 }).apply {
                     
                     var lastPageHeightPx = -1
+                    /* Lets the live DOM be inspected over adb during development; release
+                       builds keep this off. */
+                    if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                        WebView.setWebContentsDebuggingEnabled(true)
+                    }
                     lifetime.view = this
                     webView = this
                     importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
@@ -301,8 +299,8 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         userAgentString = if (desktop) DESKTOP_CHROME_UA else null
                         /* See applyMode(): desktop pages are fixed-width canvases and need a wide
                            viewport plus overview scaling to fit the screen. */
-                        useWideViewPort = true
-                        loadWithOverviewMode = desktop
+                        useWideViewPort = false
+                        loadWithOverviewMode = needsOverviewScale(url)
                         javaScriptEnabled = true
                         builtInZoomControls = true
                         displayZoomControls = false
@@ -753,6 +751,70 @@ private val PAGE_HEIGHT_SCRIPT = """
  * sliver; narrower ones let it overflow again.
  */
 private const val DESKTOP_VIEWPORT_WIDTH = 700
+
+/*
+ * Height repair for pages whose layout is expressed in `vh`.
+ *
+ * Measured on a device: this WebView resolves `vh` to 0px even for a trivial test element, while
+ * window.innerHeight reports the real value. Campus systems commonly build their whole shell on
+ * `height:100vh`, so every container collapses to zero and the page renders as a thin strip.
+ *
+ * The fix converts the vh-based boxes to pixel heights computed from innerHeight, and lets the
+ * content frame absorb the remaining space. Scoped to pages that actually use vh containers, so
+ * ordinary pages are untouched.
+ */
+private val VH_HEIGHT_REPAIR_SCRIPT = """
+(function() {
+  function apply() {
+    try {
+      var H = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+      if (!H) return false;
+      var host = document.head || document.documentElement;
+      if (!host) return false;
+      /* Only intervene where a vh-sized container is actually present. */
+      var shell = document.querySelector('.edu-container, .edu-container-new, [class*="edu-container"]');
+      if (!shell) return true;
+      var px = H + 'px';
+      var css = ''
+        + 'html,body{height:' + px + '!important;min-height:' + px + '!important;margin:0!important;}'
+        + '.edu-container,.edu-container-new,[class*="edu-container"]{height:' + px
+        + '  !important;min-height:' + px + '!important;display:flex!important;}'
+        + '.edu-aside,.edu-main{height:' + px + '!important;display:flex!important;flex-direction:column!important;}'
+        + '.edu-center{display:flex!important;flex-direction:column!important;height:100%!important;}'
+        + '#edu-cm{flex:1 1 auto!important;min-height:0!important;height:auto!important;display:block!important;overflow:hidden!important;}'
+        + '#Frame0{display:block!important;width:100%!important;height:100%!important;border:0!important;}';
+      var el = document.getElementById('__xwake_vh_fix');
+      if (!el) {
+        el = document.createElement('style');
+        el.id = '__xwake_vh_fix';
+        host.appendChild(el);
+      }
+      if (el.textContent !== css) el.textContent = css;
+      return true;
+    } catch (e) { return false; }
+  }
+  if (apply()) return 'ok';
+  var tries = 0;
+  var timer = setInterval(function() {
+    tries += 1;
+    if (apply() || tries > 40) clearInterval(timer);
+  }, 50);
+  return 'deferred';
+})()
+""".trimIndent()
+
+/*
+ * Whether a URL belongs to a fixed-width sign-on canvas that needs overview scaling.
+ *
+ * Decided from the URL, never from the rendered document: WebView applies
+ * loadWithOverviewMode during layout, so flipping it after a page has loaded forces a re-layout
+ * that collapses height:100% chains. Sign-on pages are the ones hosted on the identity provider
+ * (the CAS path), which is stable across deployments; everything else keeps its own viewport.
+ */
+private fun needsOverviewScale(url: String): Boolean = runCatching {
+    val path = Uri.parse(url).path.orEmpty().lowercase()
+    path.contains("/cas/") || path.endsWith("sso.jsp")
+}.getOrDefault(false)
 
 /*
  * Rewrites the page viewport to a desktop canvas width. Only applied in desktop mode; mobile mode

@@ -63,8 +63,14 @@ object SchoolParser {
         require(candidates.size == 1) { "未找到唯一可识别的课表；需要明确的星期表头" }
         val table = candidates.single()
         require(table.select("table").none { it !== table }) { "不支持嵌套课表" }
-        require(table.select("td[rowspan],th[rowspan],td[colspan],th[colspan]").all {
-            (it.attr("rowspan").ifEmpty { "1" } == "1") && (it.attr("colspan").ifEmpty { "1" } == "1")
+        /* Merged cells are only a problem when they carry course data. A note row spanning the
+           full width ("备注:" with class/activity hints) is common and harmless, and rejecting it
+           failed otherwise perfectly readable timetables. */
+        val merged = table.select("td[rowspan],th[rowspan],td[colspan],th[colspan]")
+        require(merged.all { cell ->
+            val rowspan = cell.attr("rowspan").ifEmpty { "1" }
+            val colspan = cell.attr("colspan").ifEmpty { "1" }
+            (rowspan == "1" && colspan == "1") || isNoteCell(cell)
         }) { "暂不支持合并单元格课表，请使用文件导入" }
         val rows = table.select("tr")
         var columns: Map<Int, Int>? = null
@@ -113,15 +119,26 @@ object SchoolParser {
                     periods[p] = period
                 }
             }
+            /* A summary band spanning most of the row (military training, labour practice, 备注) is
+               not a course slot. It carries several week ranges, so the per-course check below
+               would reject the import over it; skip the entire row instead. */
+            val spansWide = cells.any { c ->
+                (c.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1) >= 3 ||
+                    (c.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1) >= 3
+            }
+            if (spansWide) return@forEach
             require(cells.withIndex().all { (index, cell) -> index == 0 || index in mapping || cell.text().isBlank() }) { "非星期列含有未知内容" }
             mapping.forEach { (index, day) ->
                 val cell = cells[index]
-                val blocks = cell.select(".kbcontent").let { if (it.isEmpty()) listOf(cell) else it.toList() }
+                /* Select the exact class: the ".kbcontent" selector also matches ".kbcontent1",
+                   which is a hidden duplicate of the same slot and would double the week matches. */
+                val blocks = cell.select("[class=kbcontent], .kbcontent:not([class*=kbcontent1])")
+                    .let { if (it.isEmpty()) listOf(cell) else it.toList() }
                 blocks.forEach blockLoop@ { block ->
                     val copy = block.clone()
                     copy.select("script,style").remove()
                     copy.select("br").forEach { it.after("\n") }
-                    val lines = copy.wholeText().split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+                    val lines = copy.wholeText().replace('\u00a0', ' ').split('\n').map { it.trim() }.filter { it.isNotEmpty() }
                     if (lines.isEmpty() || lines.all { it in listOf("-", "--", "无", "暂无课程") }) return@blockLoop
                     val matches = weekExpression.findAll(lines.joinToString(" ")).toList()
                     require(matches.size == 1) { "部分课程周次不明确，拒绝导入" }
@@ -182,6 +199,24 @@ object SchoolParser {
             }
         }.distinct()
         return names.singleOrNull()
+    }
+
+    /** A full-width note cell such as "备注: ..." — carries no timetable data. */
+    /**
+     * A merged cell that carries no timetable data.
+     *
+     * Campus timetables commonly end with one full-width summary row (military training,
+     * labour practice, "备注:" ...). Such a cell spans most of the table and never holds a
+     * weekday label, so it can be skipped instead of failing the whole import.
+     */
+    private fun isNoteCell(cell: Element): Boolean {
+        val text = cell.text().trim()
+        if (text.isEmpty()) return true
+        if (weekday.matches(text)) return false
+        val colspan = cell.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1
+        val rowspan = cell.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1
+        /* Wide enough to be a summary band rather than a course slot. */
+        return colspan >= 3 || rowspan >= 3
     }
 
     private fun cells(row: Element): List<Element> = row.children().filter { it.tagName() == "td" || it.tagName() == "th" }

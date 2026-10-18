@@ -12,7 +12,9 @@ android {
         targetSdk = 36
         versionCode = 7
         versionName = "2.5.0"
-        ndk { abiFilters += "arm64-v8a" }
+        /* arm64 for phones; x86_64 so emulators run natively instead of under ARM
+           translation, which breaks WebView percentage-height layout. */
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
