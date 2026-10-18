@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The desktop-mode bridge is fetched from the asset manager by name at runtime,
+  so resource shrinking cannot see it. Keep it explicitly.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@assets/web/xwake_post_bridge.js" />
