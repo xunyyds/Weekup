@@ -1,6 +1,6 @@
 # xwake
 
-原生 Android 课程表应用。纯 Kotlin + Jetpack Compose，无 Flutter 引擎、无自建后端，数据全部保存在本机。
+原生 Android 课程表应用，纯 Kotlin + Jetpack Compose
 
 ## 环境
 
