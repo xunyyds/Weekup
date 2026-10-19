@@ -67,32 +67,3 @@ data/          Models、Repository、BackupCodec、SchoolParser、XlsxReader、X
 core/          concurrent/XwakeExecutors、platform/（APK 分享、链接、元数据）、prefs/
 ```
 
-### 几个实现要点
-
-**周次与日期**：`AppSettings.start` 是第 1 周第一天，第 N 周即从它起第 `(N-1)*7` 天。表头日期、周区间标签、今天高亮全部由 `WeekDates` 推算，不另设第二套算法。
-
-**课表手势**：单指滚动、双指缩放、拖过左右边界切换周次，全部集中在一处。手势结束一定吸附——缩放吸到「屏幕上正好放下整数列」的档位，偏移吸到整格边界，所以停下来看到的永远是完整格子。
-
-**排课编辑**：长按课表进入，顶栏出现「完成」。拖动课程改时间，拖星期表头整列移动，拖左侧节次整行移动；落点已有课时弹出「替换（两门课互换）/ 覆盖」由用户当场决定。编辑模式下不翻周，拖动课程时也不平移表格，否则落点会算回原格。
-
-**作息**：默认一天 20 节（8:00 起、40 分钟一节、间隔 5 分钟）。`resizePeriods` 扩容时沿用现有间隔外推，越过午夜则拒绝；`adjustPeriods` 顺延越界时给出可读提示。
-
-**教务导入**：WebView 走原生网络栈，不拦截、不重放请求。脚本递归遍历同源 iframe 收集 `table`，剔除脚本与媒体节点后交给 Jsoup。页面上可能同时存在课表预览小部件与真正的课表，解析器逐张尝试、取课程最多的一张。
-
-**表格导入**：`.xlsx` 是 zip + XML，用平台自带的 `ZipInputStream` 与 SAX 解析，不引入 POI。`XlsxTimetable` 的星期、节次、周次判定与网页导入共用同一套规则。
-
-**并发**：`XwakeExecutors` 提供两个池——`io`（阻塞 IO，核心数×2+2，有界队列 + CallerRuns）与 `compute`（CPU 密集，核心数封顶 6）。提醒排期刻意保持单线程：`sync()` 先撤销全部闹钟再重设，并发会交出错乱的闹期。
-
-**动效**：`XwakeMotion` / `XwakeShapes` / `XwakeSpacing` / `XwakeElevation` 四组 token 统一时长、缓动、圆角、间距与阴影。同心圆角由 `nested(radius, inset)` 推导。所有动画读取 `xwakeMotionEnabled()`，关闭时直接跳到终态。
-
-**液态玻璃**：Android 13+ 硬件加速时用 `RuntimeShader` 做边缘折射与高光，采样背景图层；SDK<33 回退纯色材质。`RenderEffect` 按几何尺寸缓存，避免每帧重建。
-
-## 测试
-
-JVM 单元测试 107 项，覆盖备份编解码、数据校验、课表解析（含真实页面结构夹具）、xlsx 解包、周次与日期换算、作息增删、排课移动与冲突、提醒日期/DST、搜索管线、高亮区间合并与课表投影等价性。
-
-```bash
-cd android && ./gradlew :app:testDebugUnitTest
-```
-
-真机性能基线见 `android/benchmark/README.md`（Macrobenchmark，需连接设备）。
