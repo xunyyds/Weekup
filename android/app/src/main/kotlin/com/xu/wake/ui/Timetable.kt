@@ -514,12 +514,12 @@ fun Timetable(
                             }
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
-                            Row(Modifier.graphicsLayer { translationX = -offsetX }) {
+                            Row(Modifier.requiredHeight(with(density) { (cellH * periodCount).toDp() }).graphicsLayer { translationX = -offsetX }) {
                                 projection.days.forEachIndexed { dayIndex, day ->
                                     Box(
                                         Modifier
                                             .width(with(density) { cellW.toDp() })
-                                            .fillMaxHeight()
+                                            .height(with(density) { (cellH * periodCount).toDp() })
                                             .graphicsLayer { translationY = -offsetY },
                                     ) {
                                         Column {
