@@ -205,18 +205,20 @@ fun Timetable(
     val availW = (boxW - gutterPx).coerceAtLeast(1f)
     val availH = (viewportH - headerPx).coerceAtLeast(1f)
     val minZoom = minZoomFor(dayCount, availW, density.density)
-    val cellW = availW / dayCount * zoom
+    val zoomEff = zoom.coerceIn(minZoom, MAX_ZOOM)
+    LaunchedEffect(zoomEff) { if (zoomEff != zoom) zoom = zoomEff }
+    val cellW = availW / dayCount * zoomEff
     val cellH = cellW * ROW_ASPECT
     val maxX = (cellW * dayCount - availW).coerceAtLeast(0f)
     val maxY = (cellH * periodCount - availH).coerceAtLeast(0f)
 
     fun applySnap() {
-        val targetZoom = snapZoom(zoom, dayCount, minZoom)
+        val targetZoom = snapZoom(zoomEff, dayCount, minZoom)
         val cw = availW / dayCount * targetZoom
         val ch = cw * ROW_ASPECT
         val tx = snapOffset(offsetX, cw, availW, cw * dayCount)
         val ty = snapOffset(offsetY, ch, availH, ch * periodCount)
-        val z0 = zoom
+        val z0 = zoomEff
         val x0 = offsetX.coerceIn(0f, (cellW * dayCount - availW).coerceAtLeast(0f))
         val y0 = offsetY.coerceIn(0f, (cellH * periodCount - availH).coerceAtLeast(0f))
         scope.launch {
@@ -353,7 +355,7 @@ fun Timetable(
                                 if (pinching && zoomChange != 1f) {
                                     val anchorX = (event.calculateCentroid().x - gutterPx).coerceAtLeast(0f)
                                     val atContent = (anchorX + offsetX) / cellW
-                                    val next = (zoom * zoomChange).coerceIn(minZoom, MAX_ZOOM)
+                                    val next = (zoomEff * zoomChange).coerceIn(minZoom, MAX_ZOOM)
                                     val cw = availW / dayCount * next
                                     zoom = next
                                     offsetX = (atContent * cw - anchorX)
