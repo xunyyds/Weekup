@@ -65,8 +65,6 @@ private const val ROW_ASPECT = 0.92f
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 2.6f
 
-internal const val MIN_CELL_DP = 148f
-
 private data class CourseStyle(val background: Color, val ink: Color)
 
 internal data class PlacedCourse(
@@ -119,11 +117,7 @@ private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaul
     return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
 }
 
-internal fun minZoomFor(dayCount: Int, availWidth: Float, density: Float): Float {
-    if (dayCount <= 0 || availWidth <= 0f || density <= 0f) return MIN_ZOOM
-    val cellAtUnit = availWidth / dayCount
-    return (MIN_CELL_DP * density / cellAtUnit).coerceIn(MIN_ZOOM, MAX_ZOOM)
-}
+internal fun minZoomFor(dayCount: Int, availWidth: Float, density: Float): Float = MIN_ZOOM
 
 internal fun snapZoom(zoom: Float, dayCount: Int, minZoom: Float = MIN_ZOOM): Float {
     if (dayCount <= 0) return minZoom
@@ -344,6 +338,7 @@ fun Timetable(
                             awaitFirstDown(requireUnconsumed = false)
                             var pinching = false
                             var edgePull = 0f
+                            var weekPull = 0f
                             var pulledDown = 0f
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -363,6 +358,8 @@ fun Timetable(
                                 } else if (panChange != Offset.Zero && dragging == null) {
                                     val nx = offsetX - panChange.x
                                     val ny = offsetY - panChange.y
+                                    val horizontal = kotlin.math.abs(panChange.x) >= kotlin.math.abs(panChange.y)
+                                    if (horizontal) weekPull += panChange.x
                                     if (maxX <= 0f) edgePull += -panChange.x else {
                                         offsetX = nx.coerceIn(0f, maxX)
                                         edgePull = if (nx < 0f) nx else if (nx > maxX) nx - maxX else 0f
@@ -373,9 +370,15 @@ fun Timetable(
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
 
-                            if (!editMode && abs(edgePull) > dragThreshold) {
+                            val pulledOver = if (pinching) 0f else weekPull
+                            val turnBy = when {
+                                abs(edgePull) > dragThreshold -> if (edgePull > 0) 1 else -1
+                                abs(pulledOver) > dragThreshold * 1.4f -> if (pulledOver > 0) -1 else 1
+                                else -> 0
+                            }
+                            if (!editMode && turnBy != 0) {
                                 offsetX = 0f
-                                onViewWeek((week + if (edgePull < 0) 1 else -1).coerceIn(1, s.weekCount))
+                                onViewWeek((week + turnBy).coerceIn(1, s.weekCount))
                             } else if (s.autoHideBars) {
                                 val next = pulledDown > dragThreshold
                                 if (next != immersive) { immersive = next; onImmersive(next) }
