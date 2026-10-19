@@ -1,0 +1,31 @@
+#!/bin/sh
+# Conventional Commits 校验：类型白名单 + 格式 + 长度
+
+msg_file="$1"
+first=$(head -n 1 "$msg_file")
+
+# 合并、回滚、修补类提交放行
+case "$first" in
+  Merge*|Revert*|fixup!*|squash!*|amend!*) exit 0 ;;
+esac
+
+if ! printf '%s' "$first" | grep -Eq '^(feat|fix|docs|style|refactor|chore)(\([a-z0-9._-]+\))?: .+'; then
+  echo "✗ 提交信息不符合规范：$first" >&2
+  echo "  需要 <type>(<scope>): <subject>" >&2
+  echo "  type: feat fix docs style refactor chore" >&2
+  echo "  例: fix(schedule): 修正拖放冲突处理" >&2
+  exit 1
+fi
+
+subject=$(printf '%s' "$first" | sed -E 's/^[a-z]+(\([^)]*\))?: //')
+chars=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+if [ "$chars" -gt 50 ]; then
+  echo "✗ 标题过长（$chars 字符，上限 50）：$subject" >&2
+  exit 1
+fi
+
+case "$subject" in
+  *.) echo "✗ 标题结尾不要加句号：$subject" >&2; exit 1 ;;
+esac
+
+exit 0

@@ -1,0 +1,10 @@
+
+# <type>(<scope>): <subject>
+#
+# type  : feat | fix | docs | style | refactor | chore
+# scope : schedule | import | dock | topbar | settings | repo
+# subject: 动词开头，中文 ≤20 字，结尾不加句号
+#
+# 例: fix(schedule): 修正拖放冲突处理
+#
+# 以下行请勿改动，提交时会被自动去掉
