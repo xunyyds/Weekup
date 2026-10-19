@@ -429,17 +429,21 @@ fun Timetable(
                                         ),
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
+                                    val gutterDp = with(density) { cellH.toDp().value }
+                                    val periodSize = (gutterDp / 5.2f).coerceIn(8f, 12f).sp
+                                    val clockSize = (gutterDp / 8.2f).coerceIn(6f, 9f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             pr.period.toString(),
                                             style = MaterialTheme.typography.labelMedium,
+                                            fontSize = periodSize,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         if (pr.endMinutes > pr.startMinutes) {
                                             Text(
                                                 clock(pr.startMinutes),
                                                 style = MaterialTheme.typography.labelSmall,
-                                                fontSize = 9.sp,
+                                                fontSize = clockSize,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
 
@@ -448,7 +452,7 @@ fun Timetable(
                                                 Text(
                                                     clock(pr.endMinutes),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    fontSize = 9.sp,
+                                                    fontSize = clockSize,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f),
                                                 )
                                             }
@@ -514,12 +518,12 @@ fun Timetable(
                             }
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
-                            Row(Modifier.requiredHeight(with(density) { (cellH * periodCount).toDp() }).graphicsLayer { translationX = -offsetX }) {
+                            Row(Modifier.fillMaxSize().graphicsLayer { translationX = -offsetX }) {
                                 projection.days.forEachIndexed { dayIndex, day ->
                                     Box(
                                         Modifier
                                             .width(with(density) { cellW.toDp() })
-                                            .height(with(density) { (cellH * periodCount).toDp() })
+                                            .requiredHeight(with(density) { (cellH * periodCount).toDp() })
                                             .graphicsLayer { translationY = -offsetY },
                                     ) {
                                         Column {
