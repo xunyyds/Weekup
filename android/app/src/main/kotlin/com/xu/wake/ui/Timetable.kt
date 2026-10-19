@@ -56,11 +56,11 @@ import kotlin.math.roundToInt
 
 private val dayNames = listOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
 
-private val gridCellShape = XwakeShapes.rounded(XwakeShapes.small)
+private val gridCellShape = androidx.compose.ui.graphics.RectangleShape
 
 private val gutterWidth = 54.dp
 
-private const val ROW_ASPECT = 0.92f
+private const val ROW_ASPECT = 1.02f
 
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 2.6f
@@ -578,14 +578,14 @@ fun Timetable(
                                                 )
 
                                             val cardDp = with(density) { cellW.toDp().value }
-                                            val cardSize = (cardDp / 8.6f).coerceIn(9f, 15f).sp
+                                            val cardSize = (cardDp / 7.2f).coerceIn(7f, 12f).sp
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
-                                                PressCard({ onCourse(course) }, card, style.background) {
+                                                PressCard({ onCourse(course) }, card, style.background, gridCellShape, minHeight = 0.dp, contentPadding = 4.dp) {
                                                     Text(
                                                         course.name,
                                                         color = style.ink,
                                                         fontSize = cardSize,
-                                                        lineHeight = cardSize * 1.15f,
+                                                        lineHeight = cardSize * 1.06f,
                                                         fontWeight = FontWeight.Bold,
                                                         maxLines = 3,
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -594,9 +594,9 @@ fun Timetable(
                                                         course.location + (if (course.location.isBlank()) "" else "\n") +
                                                             course.startPeriod + "—" + course.endPeriod + "节",
                                                         color = style.ink.copy(alpha = .85f),
-                                                        fontSize = cardSize * .86f,
-                                                        lineHeight = cardSize,
-                                                        maxLines = 3,
+                                                        fontSize = cardSize * .82f,
+                                                        lineHeight = cardSize * .95f,
+                                                        maxLines = 2,
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                     )
                                                 }

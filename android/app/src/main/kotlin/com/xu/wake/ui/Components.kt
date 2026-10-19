@@ -206,6 +206,9 @@ fun PressCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surfaceContainer,
+    shape: androidx.compose.ui.graphics.Shape = XwakeShapes.rounded(XwakeShapes.card),
+    minHeight: androidx.compose.ui.unit.Dp = 48.dp,
+    contentPadding: androidx.compose.ui.unit.Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -227,7 +230,6 @@ fun PressCard(
         label = "Card tone",
     )
     val haptic = LocalHapticFeedback.current
-    val shape = XwakeShapes.rounded(XwakeShapes.card)
     val contentColor = if (color == MaterialTheme.colorScheme.primary) {
         MaterialTheme.colorScheme.onPrimary
     } else MaterialTheme.colorScheme.onSurface
@@ -238,10 +240,10 @@ fun PressCard(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
-            .heightIn(min = 48.dp),
+            .heightIn(min = minHeight),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Column(Modifier.fillMaxWidth().padding(10.dp), content = content)
+            Column(Modifier.fillMaxWidth().padding(contentPadding), content = content)
         }
     }
 }
