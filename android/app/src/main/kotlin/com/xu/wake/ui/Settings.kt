@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -68,8 +67,6 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     var periodError by remember { mutableStateOf<String?>(null) }
     var motionDraft by remember(s.motionSpeed) { mutableFloatStateOf(s.motionSpeed.toFloat()) }
     var highlighted by rememberSaveable { mutableStateOf<String?>(null) }
-    val appBarState = rememberTopAppBarState()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(appBarState)
 
     val atRoot = current == Route.Root
 
@@ -79,16 +76,6 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
 
         delay(1600)
         if (highlighted == highlightRequest) highlighted = null
-    }
-    LaunchedEffect(atRoot) {
-        if (!atRoot) return@LaunchedEffect
-        withFrameNanos { }
-        val limit = appBarState.heightOffsetLimit
-        if (limit < 0f) {
-            val collapsed = (-scroll.value.toFloat()).coerceIn(limit, 0f)
-            appBarState.heightOffset = collapsed
-            appBarState.contentOffset = collapsed
-        }
     }
     fun update(settings:()->AppSettings) { try { onChange(data.copy(settings=settings())) } catch(e:Exception) { error=e.message ?: "设置无效" } }
     fun text(title:String,value:String,save:(String)->Unit) { edit=EditSetting(title,value,save) }
@@ -102,7 +89,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     }
     BackHandler(!atRoot) { back() }
     Scaffold(
-        modifier=Modifier.fillMaxSize().then(if(atRoot) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier),
+        modifier=Modifier.fillMaxSize(),
         containerColor=MaterialTheme.colorScheme.background,
         contentWindowInsets=WindowInsets(0,0,0,0),
         topBar={
@@ -111,7 +98,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
 
                     XwakeTopBar(
                         title = "设置",
-                        collapseFraction = scrollBehavior.state.collapsedFraction,
+                        collapseFraction = if (atRoot) (scroll.value.toFloat() / SETTINGS_COLLAPSE_PX).coerceIn(0f, 1f) else 0f,
                     )
                     XwakeSearchPill(
                         collapsed=!searchExpanded,
@@ -329,6 +316,8 @@ private val Route.parent: Route
     }
 
 private val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
+
+private val SETTINGS_COLLAPSE_PX = 6f
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
