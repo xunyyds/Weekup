@@ -65,6 +65,8 @@ private const val ROW_ASPECT = 0.92f
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 2.6f
 
+internal const val MIN_CELL_DP = 148f
+
 private data class CourseStyle(val background: Color, val ink: Color)
 
 internal data class PlacedCourse(
@@ -117,10 +119,16 @@ private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaul
     return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
 }
 
-internal fun snapZoom(zoom: Float, dayCount: Int): Float {
-    if (dayCount <= 0) return MIN_ZOOM
+internal fun minZoomFor(dayCount: Int, availWidth: Float, density: Float): Float {
+    if (dayCount <= 0 || availWidth <= 0f || density <= 0f) return MIN_ZOOM
+    val cellAtUnit = availWidth / dayCount
+    return (MIN_CELL_DP * density / cellAtUnit).coerceIn(MIN_ZOOM, MAX_ZOOM)
+}
+
+internal fun snapZoom(zoom: Float, dayCount: Int, minZoom: Float = MIN_ZOOM): Float {
+    if (dayCount <= 0) return minZoom
     val visible = (dayCount / zoom).roundToInt().coerceIn(1, dayCount)
-    return (dayCount.toFloat() / visible).coerceIn(MIN_ZOOM, MAX_ZOOM)
+    return (dayCount.toFloat() / visible).coerceIn(minZoom, MAX_ZOOM)
 }
 
 internal fun snapOffset(offset: Float, cell: Float, viewport: Float, content: Float): Float {
@@ -196,13 +204,14 @@ fun Timetable(
     val periodCount = s.periods.size.coerceAtLeast(1)
     val availW = (boxW - gutterPx).coerceAtLeast(1f)
     val availH = (viewportH - headerPx).coerceAtLeast(1f)
+    val minZoom = minZoomFor(dayCount, availW, density.density)
     val cellW = availW / dayCount * zoom
     val cellH = cellW * ROW_ASPECT
     val maxX = (cellW * dayCount - availW).coerceAtLeast(0f)
     val maxY = (cellH * periodCount - availH).coerceAtLeast(0f)
 
     fun applySnap() {
-        val targetZoom = snapZoom(zoom, dayCount)
+        val targetZoom = snapZoom(zoom, dayCount, minZoom)
         val cw = availW / dayCount * targetZoom
         val ch = cw * ROW_ASPECT
         val tx = snapOffset(offsetX, cw, availW, cw * dayCount)
@@ -344,7 +353,7 @@ fun Timetable(
                                 if (pinching && zoomChange != 1f) {
                                     val anchorX = (event.calculateCentroid().x - gutterPx).coerceAtLeast(0f)
                                     val atContent = (anchorX + offsetX) / cellW
-                                    val next = (zoom * zoomChange).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                                    val next = (zoom * zoomChange).coerceIn(minZoom, MAX_ZOOM)
                                     val cw = availW / dayCount * next
                                     zoom = next
                                     offsetX = (atContent * cw - anchorX)
@@ -564,7 +573,7 @@ fun Timetable(
                                                 )
 
                                             val cardDp = with(density) { cellW.toDp().value }
-                                            val cardSize = (cardDp / 4.2f).coerceIn(8f, 15f).sp
+                                            val cardSize = (cardDp / 8.6f).coerceIn(9f, 15f).sp
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
                                                 PressCard({ onCourse(course) }, card, style.background) {
                                                     Text(
