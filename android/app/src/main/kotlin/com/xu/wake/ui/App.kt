@@ -25,6 +25,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.xu.wake.data.*
 import com.xu.wake.domain.ScheduleActions
@@ -88,6 +90,10 @@ fun XwakeApp() {
 
 
     var offerPeriodEdit by remember { mutableStateOf(false) }
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val dockOverlap = if (data.settings.navigationStyle == "default") 0.dp
+        else with(density) { dockHeightPx.toDp() } + 10.dp
     fun applyMove(move: Triple<String, String, Pair<Int, Int>>, mode: ScheduleActions.MoveMode) {
         val (kind, id, ends) = move
         val next = when (kind) {
@@ -242,7 +248,7 @@ fun XwakeApp() {
                                 )
                                 else SettingsPage(data, settingsScroll, settingsRoute, highlightRequest, searchOpen, { settingsRoute = it }, { candidate -> commit(candidate) }, { editingId = null; page = "course" }, { page = "periods" }, {
                                     openBrowser()
-                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true })
+                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true }, dockOverlap)
                             }
                         }
                     }
@@ -255,7 +261,8 @@ fun XwakeApp() {
             XwakeDock(
                 data.settings.navigationStyle, tab, { tab = it },
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .onSizeChanged { dockHeightPx = it.height },
             )
         }
         if (busy) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha=.12f)).clickable(interactionSource=remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication=null) {}, contentAlignment=Alignment.Center) { CircularProgressIndicator() }

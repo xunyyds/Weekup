@@ -53,7 +53,7 @@ private data class EditSetting(val title: String, val initial: String, val save:
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:String,highlightRequest:String?,searchExpanded:Boolean,onRoute:(String)->Unit,onChange:(AppData)->Unit,onAdd:()->Unit,onPeriods:()->Unit,onBrowser:()->Unit,onImport:()->Unit,onExport:()->Unit,onReminder:(Boolean)->Unit,onSearch:()->Unit) {
+fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:String,highlightRequest:String?,searchExpanded:Boolean,onRoute:(String)->Unit,onChange:(AppData)->Unit,onAdd:()->Unit,onPeriods:()->Unit,onBrowser:()->Unit,onImport:()->Unit,onExport:()->Unit,onReminder:(Boolean)->Unit,onSearch:()->Unit,bottomInset:androidx.compose.ui.unit.Dp=0.dp) {
     val context = LocalContext.current
     val s = data.settings
     val current = Route.of(route)
@@ -278,7 +278,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                 }
                 Route.About -> AboutContent()
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp + bottomInset))
         }
     }
       }
