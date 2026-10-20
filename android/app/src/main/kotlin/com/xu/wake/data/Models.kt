@@ -47,6 +47,7 @@ data class AppSettings(
     val navigationStyle: String = "default",
     val fontScale: Double = 1.0,
     val density: Double = 0.85,
+    val cellTextAlign: String = "start",
     val firstDay: Int = 1,
     val lastDay: Int = 7,
     val weekStart: Int = 1,
@@ -76,6 +77,7 @@ data class AppSettings(
         require(theme in listOf("system", "light", "dark"))
         require(themePalette in listOf("blue", "green", "purple", "orange", "rose", "teal"))
         require(navigationStyle in listOf("default", "floating", "liquid"))
+        require(cellTextAlign in listOf("start", "center", "end"))
         require(!end.isBefore(start) && reminderMinutes in 0..10080 && defaultColor in 0..0xffffffffL)
         require(periods.isNotEmpty() && periods.map { it.period }.distinct().size == periods.size)
         val ordered = periods.sortedBy { it.period }

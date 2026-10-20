@@ -41,6 +41,15 @@ class BackupCodecTest {
         assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(root.toString()) }
         assertThrows(IllegalArgumentException::class.java) { AppSettings(themePalette = "unknown") }
     }
+    @Test fun roundTripsCellTextAlignAndDefaultsToStart() {
+        listOf("start", "center", "end").forEach { align ->
+            val data = sample().copy(settings = sample().settings.copy(cellTextAlign = align))
+            assertEquals(align, BackupCodec.decode(BackupCodec.encode(data)).settings.cellTextAlign)
+        }
+        val root = org.json.JSONObject(BackupCodec.encode(sample()))
+        root.getJSONObject("settings").put("cellTextAlign", "middle")
+        assertEquals("start", BackupCodec.decode(root.toString()).settings.cellTextAlign)
+    }
     @Test fun refusesMalformedOrUnsupportedBackup() {
         val valid = BackupCodec.encode(sample())
         listOf("{}", "[]", valid + " trailing", valid.replace("\"version\":1", "\"version\":2"),

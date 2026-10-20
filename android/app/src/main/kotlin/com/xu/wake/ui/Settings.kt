@@ -180,6 +180,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                         }
                         Text("越小一屏放下越多；行高与格子同步收缩。课表上双指捏合也能直接缩放。",Modifier.padding(horizontal=18.dp).padding(top=6.dp,bottom=14.dp),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    ChoiceSetting("格内文字对齐",s.cellTextAlign,linkedMapOf("start" to "靠左","center" to "居中","end" to "靠右")) { update { s.copy(cellTextAlign=it) } }
                     SettingsTarget("自动隐藏栏") {
                         Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

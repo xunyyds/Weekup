@@ -16,7 +16,7 @@ object BackupCodec {
             put("theme", s.theme); put("navigationStyle", s.navigationStyle)
             put("themePalette", s.themePalette); put("dynamicColor", s.dynamicColor)
             put("motionSpeed", s.motionSpeed); put("reduceMotion", s.reduceMotion); put("transitionStyle", s.transitionStyle); put("autoHideBars", s.autoHideBars)
-            put("fontScale", s.fontScale); put("density", s.density)
+            put("fontScale", s.fontScale); put("density", s.density); put("cellTextAlign", s.cellTextAlign)
             put("firstDay", s.firstDay); put("lastDay", s.lastDay); put("weekStart", s.weekStart)
             put("currentWeek", s.currentWeek); put("weekCount", s.weekCount)
             put("defaultColor", s.defaultColor); put("reminderMinutes", s.reminderMinutes); put("reminders", s.reminders)
@@ -51,6 +51,8 @@ object BackupCodec {
                 school = j.string("school", ""), schoolUrl = j.string("schoolUrl", ""),
                 theme = j.string("theme", "system"), navigationStyle = j.string("navigationStyle", "default").let { if (it in listOf("default", "floating", "liquid")) it else "default" },
                 fontScale = j.number("fontScale", 1.0), density = j.number("density", 0.85),
+                cellTextAlign = j.string("cellTextAlign", defaults.cellTextAlign)
+                    .let { if (it in listOf("start", "center", "end")) it else defaults.cellTextAlign },
                 firstDay = j.intOr("firstDay", 1), lastDay = j.intOr("lastDay", 7), weekStart = j.intOr("weekStart", 1),
                 currentWeek = j.intOr("currentWeek", 1), weekCount = j.intOr("weekCount", 20),
                 defaultColor = j.longOr("defaultColor", 0xffd9e9deL), reminderMinutes = j.intOr("reminderMinutes", 10),

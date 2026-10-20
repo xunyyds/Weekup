@@ -209,6 +209,7 @@ fun PressCard(
     shape: androidx.compose.ui.graphics.Shape = XwakeShapes.rounded(XwakeShapes.card),
     minHeight: androidx.compose.ui.unit.Dp = 48.dp,
     contentPadding: androidx.compose.ui.unit.Dp = 10.dp,
+    contentAlignment: androidx.compose.ui.Alignment.Horizontal = androidx.compose.ui.Alignment.Start,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -243,7 +244,11 @@ fun PressCard(
             .heightIn(min = minHeight),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Column(Modifier.fillMaxWidth().padding(contentPadding), content = content)
+            Column(
+                Modifier.fillMaxWidth().padding(contentPadding),
+                horizontalAlignment = contentAlignment,
+                content = content,
+            )
         }
     }
 }

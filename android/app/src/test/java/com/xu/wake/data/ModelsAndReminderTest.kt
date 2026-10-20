@@ -21,6 +21,7 @@ class ModelsAndReminderTest {
         assertThrows(IllegalArgumentException::class.java) { AppSettings(fontScale = Double.NaN) }
         assertThrows(IllegalArgumentException::class.java) { AppSettings(firstDay = 6, lastDay = 5) }
         assertThrows(IllegalArgumentException::class.java) { AppSettings(reminderMinutes = -1) }
+        assertThrows(IllegalArgumentException::class.java) { AppSettings(cellTextAlign = "middle") }
         assertThrows(IllegalArgumentException::class.java) { PeriodTime(1, 700, 700) }
         assertThrows(IllegalArgumentException::class.java) { course(emptyList()) }
         assertThrows(IllegalArgumentException::class.java) { AppData(settings(), listOf(course(), course())) }

@@ -392,12 +392,20 @@ fun Timetable(
                         translationX = slide.value * size.width
                         alpha = (1f - abs(slide.value) * 2.2f).coerceIn(0f, 1f)
                     },
+                    verticalAlignment = Alignment.Top,
                 ) {
 
                     Column(Modifier.width(gutterWidth)) {
                         Spacer(Modifier.height(dayHeaderHeight))
 
-                        Column(Modifier.graphicsLayer { translationY = -offsetY }) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(with(density) { availH.toDp() })
+                                .wrapContentHeight(Alignment.Top, unbounded = true)
+                                .clipToBounds()
+                                .graphicsLayer { translationY = -offsetY },
+                        ) {
                             s.periods.forEachIndexed { rowIndex, pr ->
                                 val marked = editMode && rowFrom != 0 && (rowTo == rowIndex || rowFrom - 1 == rowIndex)
                                 Box(
@@ -523,7 +531,9 @@ fun Timetable(
                                     Box(
                                         Modifier
                                             .width(with(density) { cellW.toDp() })
-                                            .requiredHeight(with(density) { (cellH * periodCount).toDp() })
+                                            .height(with(density) { availH.toDp() })
+                                            .wrapContentHeight(Alignment.Top, unbounded = true)
+                                            .clipToBounds()
                                             .graphicsLayer { translationY = -offsetY },
                                     ) {
                                         Column {
@@ -583,8 +593,21 @@ fun Timetable(
 
                                             val cardDp = with(density) { cellW.toDp().value }
                                             val cardSize = (cardDp / 7.2f).coerceIn(7f, 12f).sp
+                                            val textAlign = when (s.cellTextAlign) {
+                                                "center" -> androidx.compose.ui.text.style.TextAlign.Center
+                                                "end" -> androidx.compose.ui.text.style.TextAlign.End
+                                                else -> androidx.compose.ui.text.style.TextAlign.Start
+                                            }
+                                            val alignH = when (s.cellTextAlign) {
+                                                "center" -> Alignment.CenterHorizontally
+                                                "end" -> Alignment.End
+                                                else -> Alignment.Start
+                                            }
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
-                                                PressCard({ onCourse(course) }, card, style.background, gridCellShape, minHeight = 0.dp, contentPadding = 4.dp) {
+                                                PressCard(
+                                                    { onCourse(course) }, card, style.background, gridCellShape,
+                                                    minHeight = 0.dp, contentPadding = 4.dp, contentAlignment = alignH,
+                                                ) {
                                                     Text(
                                                         course.name,
                                                         color = style.ink,
@@ -592,6 +615,8 @@ fun Timetable(
                                                         lineHeight = cardSize * 1.06f,
                                                         fontWeight = FontWeight.Bold,
                                                         maxLines = 3,
+                                                        textAlign = textAlign,
+                                                        modifier = Modifier.fillMaxWidth(),
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                     )
                                                     Text(
@@ -601,6 +626,8 @@ fun Timetable(
                                                         fontSize = cardSize * .82f,
                                                         lineHeight = cardSize * .95f,
                                                         maxLines = 2,
+                                                        textAlign = textAlign,
+                                                        modifier = Modifier.fillMaxWidth(),
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                     )
                                                 }
