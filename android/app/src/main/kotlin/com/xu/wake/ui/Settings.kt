@@ -51,6 +51,20 @@ private enum class Route(val key: String) {
 
 private data class EditSetting(val title: String, val initial: String, val save: (String) -> Unit)
 
+/** 待确认的学期联动变更；用户点「应用」后才落到设置上。 */
+private data class LinkPrompt(val label: String, val plan: SemesterLink.Plan)
+
+/** 设置项下方的一行说明，用来交代某个字段会联动什么。 */
+@Composable
+private fun SectionHint(text: String) {
+    Text(
+        text,
+        Modifier.padding(horizontal = 18.dp).padding(bottom = 14.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:String,highlightRequest:String?,searchExpanded:Boolean,onRoute:(String)->Unit,onChange:(AppData)->Unit,onAdd:()->Unit,onPeriods:()->Unit,onBrowser:()->Unit,onImport:()->Unit,onExport:()->Unit,onReminder:(Boolean)->Unit,onSearch:()->Unit,bottomInset:androidx.compose.ui.unit.Dp=0.dp) {
@@ -67,6 +81,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     var periodError by remember { mutableStateOf<String?>(null) }
     var motionDraft by remember(s.motionSpeed) { mutableFloatStateOf(s.motionSpeed.toFloat()) }
     var highlighted by rememberSaveable { mutableStateOf<String?>(null) }
+    var linkPrompt by remember { mutableStateOf<LinkPrompt?>(null) }
 
     val atRoot = current == Route.Root
 
@@ -83,9 +98,25 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
         highlighted = null
         onRoute(current.parent.key)
     }
+    /**
+     * 学期设置联动：先算出要改哪些字段，交给用户二次确认，再落地。
+     *
+     * 没有任何变更时直接生效（避免为了「改第 5 周到第 5 周」弹一个空弹窗）。
+     */
+    fun confirmLink(plan: SemesterLink.Plan, label: String) {
+        if (plan.isEmpty) { update { SemesterLink.apply(s, plan) }; return }
+        linkPrompt = LinkPrompt(label, plan)
+    }
+    fun linkWeek(week: Int) = confirmLink(SemesterLink.fromCurrentWeek(s, week), "当前周 → 第 $week 周")
     fun date(start:Boolean) {
         val currentDate=if(start)s.start else s.end
-        DatePickerDialog(context,{_,y,m,d -> update { if(start)s.copy(start=LocalDate.of(y,m+1,d)) else s.copy(end=LocalDate.of(y,m+1,d)) } },currentDate.year,currentDate.monthValue-1,currentDate.dayOfMonth).show()
+        DatePickerDialog(context,{_,y,m,d ->
+            val picked = LocalDate.of(y,m+1,d)
+            confirmLink(
+                if (start) SemesterLink.fromStart(s, picked) else SemesterLink.fromEnd(s, picked),
+                (if (start) "学期开始 → $picked" else "学期结束 → $picked"),
+            )
+        },currentDate.year,currentDate.monthValue-1,currentDate.dayOfMonth).show()
     }
     BackHandler(!atRoot) { back() }
     Scaffold(
@@ -251,13 +282,18 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                         dismissButton = { TextButton(onClick = { periodDialog = false }) { Text("取消") } },
                     )
                 }
-                Route.Calendar -> Section("学期日期") { SettingsItem("学期开始",s.start.toString()) { date(true) }; SettingsItem("学期结束",s.end.toString()) { date(false) } }
+                Route.Calendar -> Section("学期日期") {
+                    SettingsItem("学期开始",s.start.toString()) { date(true) }
+                    SettingsItem("学期结束",s.end.toString()) { date(false) }
+                    SectionHint("改开学日期会自动推算当前周与结束日，确认后生效。")
+                }
                 Route.Week -> Section("周次与星期") {
                     NumberChoice("总周数",s.weekCount,1..60) { update { s.copy(weekCount=it,currentWeek=s.currentWeek.coerceAtMost(it)) } }
-                    NumberChoice("当前周",s.currentWeek,1..s.weekCount) { update { s.copy(currentWeek=it) } }
+                    NumberChoice("当前周",s.currentWeek,1..s.weekCount) { linkWeek(it) }
                     NumberChoice("周起始日",s.weekStart,1..7,true) { update { s.copy(weekStart=it) } }
                     NumberChoice("显示开始星期",s.firstDay,1..s.lastDay,true) { update { s.copy(firstDay=it) } }
                     NumberChoice("显示结束星期",s.lastDay,s.firstDay..7,true) { update { s.copy(lastDay=it) } }
+                    SectionHint("改「当前周」会按今天反推开学日期，确认后生效。")
                 }
                 Route.Courses -> Section("课程") {
                     SettingsItem("新增课程") { onAdd() }
@@ -285,6 +321,35 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
       }
     }
     if(colorOpen) ColorPickerDialog(s.defaultColor,{colorOpen=false}) { color -> update { s.copy(defaultColor=color) }; colorOpen=false }
+    linkPrompt?.let { prompt ->
+        // 二次确认：把所有会被改动的字段逐条列出，用户点「应用」才写入。
+        AlertDialog(
+            onDismissRequest = { linkPrompt = null },
+            title = { Text("联动修改学期设置") },
+            text = {
+                Column {
+                    Text(prompt.label, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(10.dp))
+                    prompt.plan.changes.forEach { line ->
+                        Text("· $line", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "确认后仅修改以上字段，其他设置保持不变。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    update { SemesterLink.apply(s, prompt.plan) }
+                    linkPrompt = null
+                }) { Text("应用") }
+            },
+            dismissButton = { TextButton(onClick = { linkPrompt = null }) { Text("取消") } },
+        )
+    }
     edit?.let { item ->
         var value by remember(item) { mutableStateOf(item.initial) }
         AlertDialog(onDismissRequest={edit=null},title={Text(item.title)},text={OutlinedTextField(value,{value=it},singleLine=true)},confirmButton={TextButton(onClick={try {item.save(value);edit=null} catch(e:Exception){error=e.message ?: "输入无效"}}){Text("保存")}},dismissButton={TextButton(onClick={edit=null}){Text("取消")}})
