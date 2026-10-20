@@ -406,7 +406,11 @@ fun Timetable(
                                 .clipToBounds()
                                 .graphicsLayer { translationY = -offsetY },
                         ) {
+                            val groups = remember(s.periods) { PeriodGroups.indexMap(s.periods) }
                             s.periods.forEachIndexed { rowIndex, pr ->
+                                val group = groups[rowIndex]
+                                val isBlockStart = group == null || group.startIndex == rowIndex
+                                val isBlockEnd = group == null || group.endIndex == rowIndex
                                 val marked = editMode && rowFrom != 0 && (rowTo == rowIndex || rowFrom - 1 == rowIndex)
                                 Box(
                                     Modifier.height(with(density) { cellH.toDp() }).fillMaxWidth()
@@ -441,22 +445,27 @@ fun Timetable(
                                     val periodSize = (gutterDp / 5.2f).coerceIn(8f, 12f).sp
                                     val clockSize = (gutterDp / 8.2f).coerceIn(6f, 9f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        // 连续节次（1-2、3-4…）只在该段首行标开始时间、
+                                        // 末行标结束时间，中间行不再重复；参照时光课表。
                                         Text(
                                             pr.period.toString(),
                                             style = MaterialTheme.typography.labelMedium,
                                             fontSize = periodSize,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                alpha = if (isBlockStart) 1f else .75f
+                                            ),
                                         )
                                         if (pr.endMinutes > pr.startMinutes) {
-                                            Text(
-                                                clock(pr.startMinutes),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontSize = clockSize,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-
-                                            val nextStart = s.periods.getOrNull(s.periods.indexOf(pr) + 1)?.startMinutes
-                                            if (pr.endMinutes != nextStart) {
+                                            if (isBlockStart) {
+                                                Text(
+                                                    clock(pr.startMinutes),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = clockSize,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                            // 段末才标结束时刻；单节自成一段时首末同行，两个都标。
+                                            if (isBlockEnd) {
                                                 Text(
                                                     clock(pr.endMinutes),
                                                     style = MaterialTheme.typography.labelSmall,
