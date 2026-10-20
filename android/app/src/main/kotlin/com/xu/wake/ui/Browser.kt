@@ -135,8 +135,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                 browser.stopLoading()
                 browser.webChromeClient = null
                 browser.webViewClient = WebViewClient()
-                browser.clearFormData()
-                browser.clearHistory()
                 browser.removeAllViews()
                 browser.destroy()
             }

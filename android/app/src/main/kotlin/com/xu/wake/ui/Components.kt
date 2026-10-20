@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -210,6 +211,7 @@ fun PressCard(
     minHeight: androidx.compose.ui.unit.Dp = 48.dp,
     contentPadding: androidx.compose.ui.unit.Dp = 10.dp,
     contentAlignment: androidx.compose.ui.Alignment.Horizontal = androidx.compose.ui.Alignment.Start,
+    contentVerticalArrangement: androidx.compose.ui.Alignment.Vertical = androidx.compose.ui.Alignment.Top,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -245,8 +247,9 @@ fun PressCard(
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             Column(
-                Modifier.fillMaxWidth().padding(contentPadding),
+                Modifier.fillMaxWidth().fillMaxHeight().padding(contentPadding),
                 horizontalAlignment = contentAlignment,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.aligned(contentVerticalArrangement),
                 content = content,
             )
         }

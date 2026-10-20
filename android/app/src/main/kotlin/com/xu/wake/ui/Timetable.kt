@@ -603,10 +603,14 @@ fun Timetable(
                                                 "end" -> Alignment.End
                                                 else -> Alignment.Start
                                             }
+                                            // 居中档是上下左右都居中；靠左/靠右仍从格子上沿起排。
+                                            val alignV = if (s.cellTextAlign == "center") Alignment.CenterVertically
+                                            else Alignment.Top
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
                                                 PressCard(
                                                     { onCourse(course) }, card, style.background, gridCellShape,
-                                                    minHeight = 0.dp, contentPadding = 4.dp, contentAlignment = alignH,
+                                                    minHeight = 0.dp, contentPadding = 4.dp,
+                                                    contentAlignment = alignH, contentVerticalArrangement = alignV,
                                                 ) {
                                                     Text(
                                                         course.name,
