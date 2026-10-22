@@ -8,8 +8,10 @@
 |---|---|
 | 应用名（桌面图标 / 启动页 / 关于页） | 课来了 |
 | 代码标识前缀 | `Kelaile`（`KelaileApp`、`KelaileTheme`、`KelaileExecutors` …） |
-| 资源命名 | `ic_kelaile`、`kelaile_post_bridge.js` |
-| 包名 / `applicationId` | `com.xu.wake`（保持不改，已装用户可直接覆盖升级） |
+| 资源命名 | `ic_kelaile`（资源名只能是 ASCII 小写） |
+| 包名 / `applicationId` | `com.xunyyds.kelaile` |
+| 线程 / 日志 / 偏好文件名 | 中文：`课来了-IO`、`课来了-计算`、`课来了-提醒`、`课来了_搜索` |
+| 只能留 ASCII 的 | Uri scheme `kelaile://reminder/`、WebView 注入节点 `__kelaile_*`、JS 哨兵 `KELAILE_TABLE_TOO_LARGE`、共享元素 key、Gradle `rootProject.name` |
 | 签名密钥 | `D:/dev/xwake-signing`、`keyAlias = "xwake"`（密钥库未迁移，改别名会导致签名不一致） |
 
 ## 环境
