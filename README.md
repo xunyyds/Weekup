@@ -1,6 +1,16 @@
-# xwake
+# 课来了
 
 原生 Android 课程表应用，纯 Kotlin + Jetpack Compose
+
+## 命名
+
+| 位置 | 取值 |
+|---|---|
+| 应用名（桌面图标 / 启动页 / 关于页） | 课来了 |
+| 代码标识前缀 | `Kelaile`（`KelaileApp`、`KelaileTheme`、`KelaileExecutors` …） |
+| 资源命名 | `ic_kelaile`、`kelaile_post_bridge.js` |
+| 包名 / `applicationId` | `com.xu.wake`（保持不改，已装用户可直接覆盖升级） |
+| 签名密钥 | `D:/dev/xwake-signing`、`keyAlias = "xwake"`（密钥库未迁移，改别名会导致签名不一致） |
 
 ## 环境
 
@@ -20,9 +30,9 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:assembleRelease
 ```
 
-需在 `android/local.properties` 指定 `sdk.dir`。Release 使用本地密钥 `D:/dev/xwake-signing`（密钥与密码不入库），开启 R8 与资源缩减。
+需在 `android/local.properties` 指定 `sdk.dir`。Release 使用本地密钥 `D:/dev/xwake-signing`（密钥与密码不入库，沿用原目录与 alias），开启 R8 与资源缩减。
 
-产物：`dist/xwake-release.apk`。
+产物：`android/app/build/outputs/apk/release/app-release.apk`。
 
 ## 依赖
 
@@ -64,6 +74,6 @@ domain/        ScheduleActions —— 无 Android 依赖的纯函数
 application/   ScheduleService —— 串行化读写 + 提醒同步
 data/          Models、Repository、BackupCodec、SchoolParser、XlsxReader、XlsxTimetable
                WeekDates（周次与真实日期换算）、Reminders、ReminderPlan
-core/          concurrent/XwakeExecutors、platform/（APK 分享、链接、元数据）、prefs/
+core/          concurrent/KelaileExecutors、platform/（APK 分享、链接、元数据）、prefs/
 ```
 
