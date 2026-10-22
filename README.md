@@ -2,6 +2,10 @@
 
 原生 Android 课程表应用，纯 Kotlin + Jetpack Compose
 
+## 下载
+
+正式版见 [Releases](https://github.com/xunyyds/kelaile/releases/latest)，当前 **v2.5.3**（包名 `com.xunyyds.kelaile`，arm64-v8a 与 x86_64 打在同一包里）。包名与签名都换过，旧版 `com.xu.wake` 不能覆盖升级，需先导出课表、卸载重装再导入。
+
 ## 命名
 
 | 位置 | 取值 |
