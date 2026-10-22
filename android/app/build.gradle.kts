@@ -18,9 +18,9 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("D:/dev/xwake-signing/release.jks")
-            storePassword = file("D:/dev/xwake-signing/password.txt").readText().trim()
-            keyAlias = "xwake"
+            storeFile = file("D:/dev/kelaile-signing/release.jks")
+            storePassword = file("D:/dev/kelaile-signing/password.txt").readText().trim()
+            keyAlias = "kelaile"
             keyPassword = storePassword
         }
     }
