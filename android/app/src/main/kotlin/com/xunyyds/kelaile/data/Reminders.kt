@@ -112,7 +112,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 
                 Reminders.sync(context.applicationContext, Repository(context).load())
             } catch (failure: Exception) {
-                android.util.Log.e("课来了提醒", "无法发送或补充课程提醒", failure)
+                android.util.Log.e("KelaileReminders", "无法发送或补充课程提醒", failure)
             } finally { pending.finish() }
         }
     }
@@ -127,7 +127,7 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         ReceiverWorker.execute {
             try { Reminders.sync(context.applicationContext, Repository(context).load()) }
-            catch (failure: Exception) { android.util.Log.e("课来了提醒", "无法恢复课程提醒；保留课表原文件", failure) }
+            catch (failure: Exception) { android.util.Log.e("KelaileReminders", "无法恢复课程提醒；保留课表原文件", failure) }
             finally { pending.finish() }
         }
     }
@@ -136,6 +136,6 @@ class BootReceiver : BroadcastReceiver() {
 private object ReceiverWorker {
 
 
-    private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "课来了-提醒") }
+    private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "kelaile-reminders") }
     fun execute(task: () -> Unit) { executor.execute(task) }
 }

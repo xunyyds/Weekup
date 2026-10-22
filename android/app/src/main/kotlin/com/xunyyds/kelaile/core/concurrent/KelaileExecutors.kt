@@ -13,13 +13,13 @@ object KelaileExecutors {
     private val cores: Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
 
     val io: ExecutorService = build(
-        name = "课来了-IO",
+        name = "kelaile-io",
         size = (cores * 2 + 2).coerceIn(4, 12),
         queueCapacity = 128,
     )
 
     val compute: ExecutorService = build(
-        name = "课来了-计算",
+        name = "kelaile-compute",
         size = cores.coerceIn(2, 6),
         queueCapacity = 32,
     )
