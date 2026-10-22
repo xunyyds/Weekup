@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.xu.wake.benchmark"
+    namespace = "com.xunyyds.kelaile.benchmark"
     compileSdk = 36
 
     defaultConfig {

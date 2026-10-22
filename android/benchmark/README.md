@@ -26,7 +26,7 @@ export JAVA_HOME='D:/dev/jdk-21/jdk-21.0.12.1+1'
 
 # 只跑某一类（快）
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.xu.wake.benchmark.StartupBenchmark
+  -Pandroid.testInstrumentationRunnerArguments.class=com.xunyyds.kelaile.benchmark.StartupBenchmark
 ```
 
 或直接用封装脚本（会先帮你检查设备与动画设置）：

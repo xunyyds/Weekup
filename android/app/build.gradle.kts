@@ -4,10 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 android {
-    namespace = "com.xu.wake"
+    namespace = "com.xunyyds.kelaile"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.xu.wake"
+        applicationId = "com.xunyyds.kelaile"
         minSdk = 26
         targetSdk = 36
         versionCode = 9

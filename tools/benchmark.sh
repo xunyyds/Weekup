@@ -35,9 +35,9 @@ echo "== 关闭系统动画（否则帧时间被污染）=="
 
 case "$SUITE" in
   all)     ARGS="" ;;
-  startup) ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xu.wake.benchmark.StartupBenchmark" ;;
-  scroll)  ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xu.wake.benchmark.TimetableScrollBenchmark" ;;
-  search)  ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xu.wake.benchmark.SearchBenchmark" ;;
+  startup) ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xunyyds.kelaile.benchmark.StartupBenchmark" ;;
+  scroll)  ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xunyyds.kelaile.benchmark.TimetableScrollBenchmark" ;;
+  search)  ARGS="-Pandroid.testInstrumentationRunnerArguments.class=com.xunyyds.kelaile.benchmark.SearchBenchmark" ;;
   *) echo "用法: $0 [all|startup|scroll|search]" >&2; exit 2 ;;
 esac
 
