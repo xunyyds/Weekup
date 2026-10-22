@@ -12,7 +12,7 @@
 | 包名 / `applicationId` | `com.xunyyds.kelaile` |
 | 线程 / 日志 / 偏好文件名 | 英文：`kelaile-io`、`kelaile-compute`、`kelaile-reminders`、`KelaileReminders`、`kelaile_search` |
 | 只能留 ASCII 的 | Uri scheme `kelaile://reminder/`、WebView 注入节点 `__kelaile_*`、JS 哨兵 `KELAILE_TABLE_TOO_LARGE`、共享元素 key、Gradle `rootProject.name` |
-| 签名密钥 | `D:/dev/kelaile-signing`（PKCS12、alias `kelaile`、RSA 4096）；旧的 `D:/dev/xwake-signing` 只为旧包 `com.xu.wake` 保留，勿删 |
+| 签名密钥 | `D:/dev/kelaile-signing`（PKCS12、alias `kelaile`、RSA 4096） |
 
 ## 环境
 
