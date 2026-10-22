@@ -57,9 +57,9 @@ fun ColorPickerDialog(initialColor: Long, onDismiss: () -> Unit, onConfirm: (Lon
         onDismissRequest = onDismiss,
         title = { Text("课程颜色") },
         text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(XwakeSpacing.md)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(XwakeSpacing.md)) {
-                    ColorSwatch(color, Modifier.size(64.dp).clip(XwakeShapes.rounded(XwakeShapes.small)))
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(KelaileSpacing.md)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KelaileSpacing.md)) {
+                    ColorSwatch(color, Modifier.size(64.dp).clip(KelaileShapes.rounded(KelaileShapes.small)))
                     Column {
                         Text("实时预览", style = MaterialTheme.typography.titleSmall)
                         Text(argbLabel(color), style = MaterialTheme.typography.bodyMedium)
@@ -67,7 +67,7 @@ fun ColorPickerDialog(initialColor: Long, onDismiss: () -> Unit, onConfirm: (Lon
                     }
                 }
                 val hueColor = Color(AndroidColor.HSVToColor(floatArrayOf(hue, 1f, 1f)))
-                Canvas(Modifier.fillMaxWidth().height(132.dp).clip(XwakeShapes.rounded(XwakeShapes.small))
+                Canvas(Modifier.fillMaxWidth().height(132.dp).clip(KelaileShapes.rounded(KelaileShapes.small))
                     .semantics { contentDescription = "饱和度与亮度调色盘；也可使用下方滑条精确调整" }
                     .pointerInput(hue) {
                         detectTapGestures { point ->
@@ -95,7 +95,7 @@ fun ColorPickerDialog(initialColor: Long, onDismiss: () -> Unit, onConfirm: (Lon
                     drawCircle(Color.White, 5.dp.toPx(), point)
                     drawCircle(Color(color.toInt()), 3.dp.toPx(), point)
                 }
-                Column(Modifier.fillMaxWidth().height(8.dp).clip(XwakeShapes.rounded(XwakeShapes.tiny)).background(
+                Column(Modifier.fillMaxWidth().height(8.dp).clip(KelaileShapes.rounded(KelaileShapes.tiny)).background(
                     Brush.horizontalGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))
                 )) {}
                 ColorChannelSlider("色相", hue, 0f..360f, "${hue.roundToInt()}°") { hue = it; syncText() }
@@ -105,10 +105,10 @@ fun ColorPickerDialog(initialColor: Long, onDismiss: () -> Unit, onConfirm: (Lon
                 Text("预设颜色", style = MaterialTheme.typography.titleSmall)
                 listOf(0xffd9e9deL, 0xffe2e5f5L, 0xfff1e4d3L, 0xffe3eaf2L, 0xfff3dce4L, 0xffd6ebeaL,
                     0xff6d8dceL, 0xff8a68a5L, 0xffcf6b71L, 0xffe5a34dL, 0xff528d73L, 0x00000000L).chunked(6).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(XwakeSpacing.sm)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KelaileSpacing.sm)) {
                         row.forEach { preset ->
-                            ColorSwatch(preset, Modifier.weight(1f).height(32.dp).clip(XwakeShapes.rounded(XwakeShapes.xs))
-                                .border(if (color == preset) 3.dp else 1.dp, if (color == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, XwakeShapes.rounded(XwakeShapes.xs))
+                            ColorSwatch(preset, Modifier.weight(1f).height(32.dp).clip(KelaileShapes.rounded(KelaileShapes.xs))
+                                .border(if (color == preset) 3.dp else 1.dp, if (color == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, KelaileShapes.rounded(KelaileShapes.xs))
                                 .clickable { select(preset); text = argbLabel(preset) }
                                 .semantics { contentDescription = "预设颜色 ${argbLabel(preset)}" })
                         }

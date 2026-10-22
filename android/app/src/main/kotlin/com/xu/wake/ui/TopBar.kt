@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun XwakeTopBar(
+fun KelaileTopBar(
     title: String,
     collapseFraction: Float,
     modifier: Modifier = Modifier,
@@ -81,7 +81,7 @@ fun rememberSystemBars(): (Boolean) -> Unit {
     val context = LocalContext.current
     return remember(context) {
         { hidden ->
-            val activity = context.xwakeActivity()
+            val activity = context.kelaileActivity()
             if (activity != null) {
                 val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
                 controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -92,8 +92,8 @@ fun rememberSystemBars(): (Boolean) -> Unit {
     }
 }
 
-private fun Context.xwakeActivity(): Activity? = when (this) {
+private fun Context.kelaileActivity(): Activity? = when (this) {
     is Activity -> this
-    is ContextWrapper -> if (baseContext !== this) baseContext.xwakeActivity() else null
+    is ContextWrapper -> if (baseContext !== this) baseContext.kelaileActivity() else null
     else -> null
 }

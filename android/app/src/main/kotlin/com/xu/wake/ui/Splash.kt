@@ -47,8 +47,8 @@ import kotlinx.coroutines.delay
                                                                                       
    
 @Composable
-fun XwakeSplash(visible: Boolean, modifier: Modifier = Modifier) {
-    val motion = xwakeMotionEnabled()
+fun KelaileSplash(visible: Boolean, modifier: Modifier = Modifier) {
+    val motion = kelaileMotionEnabled()
     var drawn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (motion) delay(120)
@@ -57,7 +57,7 @@ fun XwakeSplash(visible: Boolean, modifier: Modifier = Modifier) {
     val entrance by animateFloatAsState(
         if (drawn) 1f else .72f,
         animationSpec = if (motion) {
-            tween(xwakeMillis(XwakeMotion.slow), easing = XwakeMotion.emphasizedEasing)
+            tween(kelaileMillis(KelaileMotion.slow), easing = KelaileMotion.emphasizedEasing)
         } else tween(0),
         label = "Splash entrance",
     )
@@ -70,7 +70,7 @@ fun XwakeSplash(visible: Boolean, modifier: Modifier = Modifier) {
         exit = if (motion) fadeOut(tween(320)) + scaleOut(tween(320), targetScale = 1.06f) else fadeOut(tween(0)),
     ) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xl)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xl)) {
                 Box(
                     Modifier.size(128.dp).graphicsLayer {
                         scaleX = entrance
@@ -112,8 +112,8 @@ fun XwakeSplash(visible: Boolean, modifier: Modifier = Modifier) {
                         drawPath(tick, accent, style = Stroke(width = 2.1f * unit, cap = StrokeCap.Round, join = StrokeJoin.Round))
                     }
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xs)) {
-                    Text("xwake", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xs)) {
+                    Text("课来了", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                     Text("每一周，都从容一点", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(8.dp))

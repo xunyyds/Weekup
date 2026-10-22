@@ -80,23 +80,23 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.xu.wake.core.prefs.SearchHistory
 import com.xu.wake.data.AppData
-import com.xu.wake.ui.XwakeGlyph
-import com.xu.wake.ui.XwakeGlyphKind
-import com.xu.wake.ui.XwakeMotion
-import com.xu.wake.ui.XwakeShapes
+import com.xu.wake.ui.KelaileGlyph
+import com.xu.wake.ui.KelaileGlyphKind
+import com.xu.wake.ui.KelaileMotion
+import com.xu.wake.ui.KelaileShapes
 import com.xu.wake.ui.highlightMatches
 import com.xu.wake.ui.palette.PaletteEntry
 import com.xu.wake.ui.palette.PaletteKind
 import com.xu.wake.ui.palette.paletteActions
 import com.xu.wake.ui.palette.paletteKindOrder
-import com.xu.wake.ui.xwakeMillis
-import com.xu.wake.ui.xwakeMotionEnabled
+import com.xu.wake.ui.kelaileMillis
+import com.xu.wake.ui.kelaileMotionEnabled
 
-const val SearchFieldKey = "xwake-search-field"
+const val SearchFieldKey = "kelaile-search-field"
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun SharedTransitionScope.XwakeSearchOverlay(
+fun SharedTransitionScope.KelaileSearchOverlay(
     visible: Boolean,
     data: AppData,
     onDismiss: () -> Unit,
@@ -106,7 +106,7 @@ fun SharedTransitionScope.XwakeSearchOverlay(
 ) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val motion = xwakeMotionEnabled()
+    val motion = kelaileMotionEnabled()
     val focusRequester = remember { FocusRequester() }
 
     val query = rememberSaveable { mutableStateOf("") }
@@ -153,8 +153,8 @@ fun SharedTransitionScope.XwakeSearchOverlay(
 
     val radius = remember { Animatable(SearchPillRadius.value) }
     val scrimAlpha = remember { Animatable(0f) }
-    val cornerMillis = xwakeMillis(XwakeMotion.standard)
-    val scrimMillis = xwakeMillis(XwakeMotion.quick)
+    val cornerMillis = kelaileMillis(KelaileMotion.standard)
+    val scrimMillis = kelaileMillis(KelaileMotion.quick)
     LaunchedEffect(visible) {
         if (!motion) {
             radius.snapTo(0f)
@@ -162,7 +162,7 @@ fun SharedTransitionScope.XwakeSearchOverlay(
             return@LaunchedEffect
         }
         if (visible) {
-            radius.animateTo(0f, tween(cornerMillis, easing = XwakeMotion.emphasizedEasing))
+            radius.animateTo(0f, tween(cornerMillis, easing = KelaileMotion.emphasizedEasing))
             scrimAlpha.animateTo(1f, tween(scrimMillis))
         } else {
             scrimAlpha.snapTo(0f)
@@ -179,8 +179,8 @@ fun SharedTransitionScope.XwakeSearchOverlay(
         Modifier
     }
 
-    val enter = if (motion) fadeIn(tween(xwakeMillis(XwakeMotion.quick))) else EnterTransition.None
-    val exit = if (motion) fadeOut(tween(xwakeMillis(XwakeMotion.fast))) else ExitTransition.None
+    val enter = if (motion) fadeIn(tween(kelaileMillis(KelaileMotion.quick))) else EnterTransition.None
+    val exit = if (motion) fadeOut(tween(kelaileMillis(KelaileMotion.fast))) else ExitTransition.None
 
     AnimatedVisibility(visible = visible, enter = enter, exit = exit) {
         Box(Modifier.fillMaxSize()) {
@@ -304,14 +304,14 @@ private fun SearchField(
                 .semantics { contentDescription = "搜索框" },
             placeholder = { Text("搜索课程、设置或动作") },
             leadingIcon = {
-                XwakeGlyph(XwakeGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
+                KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(
                         onClick = onClear,
                         modifier = Modifier.semantics { contentDescription = "清空搜索内容" },
-                    ) { XwakeGlyph(XwakeGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+                    ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             },
             singleLine = true,
@@ -341,7 +341,7 @@ private fun SearchField(
         IconButton(
             onClick = onClose,
             modifier = Modifier.semantics { contentDescription = "关闭搜索" },
-        ) { XwakeGlyph(XwakeGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+        ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
@@ -446,7 +446,7 @@ private fun ResultRow(entry: PaletteEntry, terms: List<String>, highlight: SpanS
     }
     Row(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(XwakeShapes.card))
+            .clip(RoundedCornerShape(KelaileShapes.card))
             .background(
                 if (pressed) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
             )
@@ -497,7 +497,7 @@ private fun HistoryRow(entry: String, onUse: () -> Unit, onRemove: () -> Unit) {
                 .padding(start = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            XwakeGlyph(XwakeGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
+            KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(12.dp))
             Text(entry, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
         }
@@ -508,7 +508,7 @@ private fun HistoryRow(entry: String, onUse: () -> Unit, onRemove: () -> Unit) {
                 onClick = onRemove,
             ).semantics { contentDescription = "删除 " + entry },
             contentAlignment = Alignment.Center,
-        ) { XwakeGlyph(XwakeGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+        ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 

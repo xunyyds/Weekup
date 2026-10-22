@@ -67,7 +67,7 @@ private val paletteSettings: List<SettingSeed> = listOf(
     SettingSeed("浏览器导入课表", "data", "导入与备份", "教务 自动识别 桌面模式"),
     SettingSeed("导入课表文件", "data", "导入与备份", "JSON 备份 恢复"),
     SettingSeed("导出课表文件", "data", "导入与备份", "JSON 备份 保存"),
-    SettingSeed("关于 xwake", "about", "设置 · 关于", "版本 系统 开源"),
+    SettingSeed("关于课来了", "about", "设置 · 关于", "版本 系统 开源"),
     SettingSeed("分享应用", "root", "设置", "APK 安装包"),
 )
 

@@ -58,15 +58,15 @@ fun AboutContent() {
             confirmButton = { TextButton(onClick = { licenses = null }) { Text("关闭") } },
         )
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xl)) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xl)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xl)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xl)) {
             val image = logo
             if (image != null) {
-                Image(image, "xwake 图标", Modifier.size(136.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer))
+                Image(image, "课来了图标", Modifier.size(136.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer))
             } else {
                 Box(Modifier.size(136.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer))
             }
-            Text("xwake", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold)
+            Text("课来了", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold)
             Text("每一周，都从容一点", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Section("") {
@@ -90,6 +90,6 @@ fun AboutContent() {
             SettingRow("AndroidLiquidGlass", "Kyant0 · Apache License 2.0") { AppPlatform.openLink(context, AppLinks.ANDROID_LIQUID_GLASS) }
         }
         Section("") { SettingRow("分享应用", "通过系统分享当前已安装 APK") { ApkSharing.shareInstalledApk(context) } }
-        Text("课程与设置仅存于本机。教务登录由系统 WebView 处理，不收集或上传登录凭据。", Modifier.padding(XwakeSpacing.md), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("课程与设置仅存于本机。教务登录由系统 WebView 处理，不收集或上传登录凭据。", Modifier.padding(KelaileSpacing.md), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

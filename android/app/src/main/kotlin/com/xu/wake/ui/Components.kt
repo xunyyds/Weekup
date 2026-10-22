@@ -108,10 +108,10 @@ private const val StaggerRiseDp = 10f
 
 @Composable
 private fun Modifier.staggerEnter(delayMillis: Int): Modifier {
-    val motion = xwakeMotionEnabled()
+    val motion = kelaileMotionEnabled()
     val appear = remember { Animatable(if (motion) 0f else 1f) }
     LaunchedEffect(motion) {
-        if (motion) appear.animateTo(1f, tween(delayMillis, easing = XwakeMotion.emphasizedEasing))
+        if (motion) appear.animateTo(1f, tween(delayMillis, easing = KelaileMotion.emphasizedEasing))
         else appear.snapTo(1f)
     }
     val rise = with(LocalDensity.current) { StaggerRiseDp.dp.toPx() }
@@ -123,18 +123,18 @@ private fun Modifier.staggerEnter(delayMillis: Int): Modifier {
 
 @Composable
 fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    val shape = XwakeShapes.rounded(XwakeShapes.card)
-    val stagger = xwakeMotionEnabled()
+    val shape = KelaileShapes.rounded(KelaileShapes.card)
+    val stagger = kelaileMotionEnabled()
     val cursor = remember(stagger) { if (stagger) StaggerCursor() else null }
     Column(
         Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(XwakeSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(KelaileSpacing.sm),
     ) {
         if (title.isNotBlank()) {
             Text(
                 title,
                 modifier = Modifier
-                    .padding(horizontal = XwakeSpacing.lg)
+                    .padding(horizontal = KelaileSpacing.lg)
                     .semantics { heading() },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -143,7 +143,7 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(XwakeElevation.soft(XwakeElevation.card, shape)),
+                .then(KelaileElevation.soft(KelaileElevation.card, shape)),
             shape = shape,
             color = MaterialTheme.colorScheme.surfaceContainer,
         ) {
@@ -162,7 +162,7 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     val cursor = LocalStaggerCursor.current
     val slot = remember(cursor) { cursor?.next?.also { cursor.next = it + 1 } ?: 0 }
 
-    val delay = xwakeStaggerDelay(slot)
+    val delay = kelaileStaggerDelay(slot)
     Row(
         modifier = Modifier.fillMaxWidth()
             .staggerEnter(delay)
@@ -176,7 +176,7 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     ) {
         Column(
             Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xs),
         ) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             if (subtitle.isNotBlank()) Text(
@@ -185,7 +185,7 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.width(XwakeSpacing.lg))
+        Spacer(Modifier.width(KelaileSpacing.lg))
         val chevron = MaterialTheme.colorScheme.onSurfaceVariant
         Canvas(Modifier.size(8.dp, 14.dp)) {
             drawPath(
@@ -207,7 +207,7 @@ fun PressCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surfaceContainer,
-    shape: androidx.compose.ui.graphics.Shape = XwakeShapes.rounded(XwakeShapes.card),
+    shape: androidx.compose.ui.graphics.Shape = KelaileShapes.rounded(KelaileShapes.card),
     minHeight: androidx.compose.ui.unit.Dp = 48.dp,
     contentPadding: androidx.compose.ui.unit.Dp = 10.dp,
     contentAlignment: androidx.compose.ui.Alignment.Horizontal = androidx.compose.ui.Alignment.Start,
@@ -216,11 +216,11 @@ fun PressCard(
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val motion = xwakeMotionEnabled()
+    val motion = kelaileMotionEnabled()
     val scale by animateFloatAsState(
         if (pressed && motion) 0.985f else 1f,
         animationSpec = if (motion) {
-            tween(XwakeMotion.quick, easing = XwakeMotion.emphasizedEasing)
+            tween(KelaileMotion.quick, easing = KelaileMotion.emphasizedEasing)
         } else snap(),
         label = "Card press",
     )
@@ -228,7 +228,7 @@ fun PressCard(
     val tone by animateColorAsState(
         if (pressed && motion) lerp(baseColor, MaterialTheme.colorScheme.onSurface, 0.05f) else baseColor,
         animationSpec = if (motion) {
-            tween(XwakeMotion.fast, easing = XwakeMotion.standardEasing)
+            tween(KelaileMotion.fast, easing = KelaileMotion.standardEasing)
         } else snap(),
         label = "Card tone",
     )
@@ -262,7 +262,7 @@ fun PressCard(
                                                               
    
 @Composable
-fun XwakeDock(
+fun KelaileDock(
     style: String,
     index: Int,
     onSelect: (Int) -> Unit,
@@ -274,12 +274,12 @@ fun XwakeDock(
     val floating = !solid
     val liquid = style == "liquid"
     val colors = MaterialTheme.colorScheme
-    val outerRadius = if (floating) XwakeShapes.dock else XwakeShapes.tiny
+    val outerRadius = if (floating) KelaileShapes.dock else KelaileShapes.tiny
     val dockInset = 6.dp
-    val shape = if (solid) androidx.compose.ui.graphics.RectangleShape else XwakeShapes.rounded(outerRadius)
+    val shape = if (solid) androidx.compose.ui.graphics.RectangleShape else KelaileShapes.rounded(outerRadius)
 
-    val indicatorShape = XwakeShapes.rounded(XwakeShapes.nested(outerRadius, dockInset))
-    val motion = xwakeMotionEnabled()
+    val indicatorShape = KelaileShapes.rounded(KelaileShapes.nested(outerRadius, dockInset))
+    val motion = kelaileMotionEnabled()
     var dragging by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableStateOf(selected.toFloat()) }
     var dragStretch by remember { mutableStateOf(0f) }
@@ -312,7 +312,7 @@ fun XwakeDock(
                 .fillMaxWidth()
                 .then(
                     if (floating) {
-                        XwakeElevation.soft(XwakeElevation.dock, shape, 0.05f, 0.10f)
+                        KelaileElevation.soft(KelaileElevation.dock, shape, 0.05f, 0.10f)
                     } else Modifier,
                 )
                 .clip(shape).then(base).padding(if (floating) dockInset else 0.dp)
@@ -358,13 +358,13 @@ fun XwakeDock(
             
             if (floating) Box(Modifier.matchParentSize()) {
                 val indicatorMaterial = if (liquid) Modifier.liquidGlass(
-                    XwakeShapes.nested(outerRadius, dockInset).value,
+                    KelaileShapes.nested(outerRadius, dockInset).value,
                     colors.primaryContainer.copy(alpha = 0.40f),
                     colors.primaryContainer,
                 ) else Modifier.background(colors.primaryContainer)
                 Box(
                     Modifier.offset(x = slot * position).width(slot).fillMaxSize()
-                        .padding(XwakeSpacing.hairline)
+                        .padding(KelaileSpacing.hairline)
                         .graphicsLayer {
                             val stretch = if (motion && dragging) {
                                 dragStretch * (1f - abs(2f * position - 1f))
@@ -393,7 +393,7 @@ fun XwakeDock(
                     val scale by animateFloatAsState(
                         if (pressed && motion) 0.94f else 1f,
                         animationSpec = if (motion) {
-                            tween(XwakeMotion.fast, easing = XwakeMotion.emphasizedEasing)
+                            tween(KelaileMotion.fast, easing = KelaileMotion.emphasizedEasing)
                         } else snap(),
                         label = "Dock tab press",
                     )
@@ -403,7 +403,7 @@ fun XwakeDock(
                         else -> colors.onPrimaryContainer
                     }
                     Column(
-                        Modifier.weight(1f).clip(XwakeShapes.rounded(XwakeShapes.card))
+                        Modifier.weight(1f).clip(KelaileShapes.rounded(KelaileShapes.card))
                             .selectable(
                                 selected = item == selected,
                                 interactionSource = source,
@@ -417,10 +417,10 @@ fun XwakeDock(
                                 },
                             )
                             .heightIn(min = 60.dp)
-                            .padding(horizontal = XwakeSpacing.xs, vertical = XwakeSpacing.sm)
+                            .padding(horizontal = KelaileSpacing.xs, vertical = KelaileSpacing.sm)
                             .graphicsLayer { scaleX = scale; scaleY = scale },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(XwakeSpacing.xs),
+                        verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xs),
                     ) {
                         DockGlyph(if (item == 0) 2 else 3, ink)
                         Text(
@@ -561,7 +561,7 @@ data class SearchText(
                                                          
                                                           
 @Composable
-fun XwakeSearchField(
+fun KelaileSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -587,14 +587,14 @@ fun XwakeSearchField(
             modifier = Modifier.fillMaxWidth().onFocusChanged { onFocusChange(it.isFocused) },
             placeholder = { Text(placeholder) },
             leadingIcon = {
-                XwakeGlyph(XwakeGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
+                KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(
                         onClick = onClear,
                         modifier = Modifier.semantics { contentDescription = "清除搜索" },
-                    ) { XwakeGlyph(XwakeGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+                    ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             },
             singleLine = true,
@@ -628,7 +628,7 @@ fun XwakeSearchField(
                                                                                 
                                                           
 @Composable
-fun <T> XwakeSearchResults(
+fun <T> KelaileSearchResults(
     query: String,
     items: List<T>,
     textOf: (T) -> SearchText,
@@ -718,7 +718,7 @@ fun SearchResultRow(
                                                                         
                                                                          
 @Composable
-fun XwakeRecentList(
+fun KelaileRecentList(
     items: List<String>,
     onUse: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -735,7 +735,7 @@ fun XwakeRecentList(
                         .padding(start = 18.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    XwakeGlyph(XwakeGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
+                    KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(12.dp))
                     Text(entry, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -746,7 +746,7 @@ fun XwakeRecentList(
                         onClick = { onRemove(entry) },
                     ).semantics { contentDescription = "删除 $entry" },
                     contentAlignment = Alignment.Center,
-                ) { XwakeGlyph(XwakeGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+                ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         if (clearLabel != null && items.isNotEmpty()) {
@@ -758,7 +758,7 @@ fun XwakeRecentList(
 }
 
                       
-enum class XwakeGlyphKind { Search, Close, Back }
+enum class KelaileGlyphKind { Search, Close, Back }
 
                       
                                                                                     
@@ -766,8 +766,8 @@ enum class XwakeGlyphKind { Search, Close, Back }
                                                                                               
                                                                                   
 @Composable
-fun XwakeGlyph(
-    kind: XwakeGlyphKind,
+fun KelaileGlyph(
+    kind: KelaileGlyphKind,
     tint: Color = LocalContentColor.current,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 22.dp,
@@ -776,15 +776,15 @@ fun XwakeGlyph(
         val u = this.size.minDimension / 24f
         val pen = Stroke(width = 1.9f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (kind) {
-            XwakeGlyphKind.Search -> {
+            KelaileGlyphKind.Search -> {
                 drawCircle(tint, 6.4f * u, Offset(10.4f * u, 10.4f * u), style = pen)
                 drawLine(tint, Offset(15.2f * u, 15.2f * u), Offset(20.2f * u, 20.2f * u), pen.width, StrokeCap.Round)
             }
-            XwakeGlyphKind.Close -> {
+            KelaileGlyphKind.Close -> {
                 drawLine(tint, Offset(6.5f * u, 6.5f * u), Offset(17.5f * u, 17.5f * u), pen.width, StrokeCap.Round)
                 drawLine(tint, Offset(17.5f * u, 6.5f * u), Offset(6.5f * u, 17.5f * u), pen.width, StrokeCap.Round)
             }
-            XwakeGlyphKind.Back -> {
+            KelaileGlyphKind.Back -> {
                 drawLine(tint, Offset(14.5f * u, 4.5f * u), Offset(7f * u, 12f * u), pen.width, StrokeCap.Round)
                 drawLine(tint, Offset(7f * u, 12f * u), Offset(14.5f * u, 19.5f * u), pen.width, StrokeCap.Round)
             }

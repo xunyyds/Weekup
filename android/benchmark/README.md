@@ -1,4 +1,4 @@
-# xwake 真机性能基准（Macrobenchmark）
+# 课来了 真机性能基准（Macrobenchmark）
 
 真机帧时间 / 启动耗时 / GPU 开销**只能在这里测**。JVM 单元测试（`app/src/test`）测的是算法与分配，不是帧预算——两者不可互相替代。
 

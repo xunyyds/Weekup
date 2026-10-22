@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# xwake 真机性能基准 —— 可复用运行脚本
+# 课来了 真机性能基准 —— 可复用运行脚本
 # 用法: tools/benchmark.sh [all|startup|scroll|search]
 set -euo pipefail
 

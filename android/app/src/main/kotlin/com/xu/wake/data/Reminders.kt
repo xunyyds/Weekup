@@ -58,7 +58,7 @@ object Reminders {
     }
 
     private fun pending(context: Context, id: Int, flags: Int): PendingIntent? = PendingIntent.getBroadcast(context, id,
-        Intent(context, ReminderReceiver::class.java).setAction(ACTION).setData(android.net.Uri.parse("xwake://reminder/$id")),
+        Intent(context, ReminderReceiver::class.java).setAction(ACTION).setData(android.net.Uri.parse("kelaile://reminder/$id")),
         flags or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
 
     internal fun notificationAllowed(context: Context): Boolean {
@@ -112,7 +112,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 
                 Reminders.sync(context.applicationContext, Repository(context).load())
             } catch (failure: Exception) {
-                android.util.Log.e("XWakeReminders", "无法发送或补充课程提醒", failure)
+                android.util.Log.e("KelaileReminders", "无法发送或补充课程提醒", failure)
             } finally { pending.finish() }
         }
     }
@@ -127,7 +127,7 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         ReceiverWorker.execute {
             try { Reminders.sync(context.applicationContext, Repository(context).load()) }
-            catch (failure: Exception) { android.util.Log.e("XWakeReminders", "无法恢复课程提醒；保留课表原文件", failure) }
+            catch (failure: Exception) { android.util.Log.e("KelaileReminders", "无法恢复课程提醒；保留课表原文件", failure) }
             finally { pending.finish() }
         }
     }
@@ -136,6 +136,6 @@ class BootReceiver : BroadcastReceiver() {
 private object ReceiverWorker {
 
 
-    private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "xwake-reminders") }
+    private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "kelaile-reminders") }
     fun execute(task: () -> Unit) { executor.execute(task) }
 }

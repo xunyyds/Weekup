@@ -42,8 +42,8 @@ import androidx.compose.ui.unit.dp
 fun CheckMark(selected: Boolean, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, size: Dp = 18.dp) {
     val progress by animateFloatAsState(
         if (selected) 1f else 0f,
-        animationSpec = if (xwakeMotionEnabled()) {
-            tween(xwakeMillis(XwakeMotion.quick), easing = XwakeMotion.emphasizedEasing)
+        animationSpec = if (kelaileMotionEnabled()) {
+            tween(kelaileMillis(KelaileMotion.quick), easing = KelaileMotion.emphasizedEasing)
         } else snap(),
         label = "Check mark",
     )
@@ -75,7 +75,7 @@ fun CheckRow(title: String, selected: Boolean, onClick: () -> Unit, subtitle: St
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(XwakeSpacing.hairline)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KelaileSpacing.hairline)) {
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -84,7 +84,7 @@ fun CheckRow(title: String, selected: Boolean, onClick: () -> Unit, subtitle: St
             )
             if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.width(XwakeSpacing.md))
+        Spacer(Modifier.width(KelaileSpacing.md))
         CheckMark(selected)
     }
 }

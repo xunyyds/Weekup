@@ -84,7 +84,7 @@ class SearchPipelineBenchmarkTest {
             println(line)
         }
 
-        emit("# xwake search pipeline — measured baseline")
+        emit("# 课来了 search pipeline — measured baseline")
         emit("jvm          = " + System.getProperty("java.version") + " / " + System.getProperty("os.name"))
         emit("fixture      = " + courseCount + " courses, " + queryCount + " distinct queries")
         emit("")

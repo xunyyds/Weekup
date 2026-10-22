@@ -23,23 +23,23 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.xu.wake.ui.XwakeGlyph
-import com.xu.wake.ui.XwakeGlyphKind
-import com.xu.wake.ui.XwakeShapes
-import com.xu.wake.ui.xwakeMotionEnabled
+import com.xu.wake.ui.KelaileGlyph
+import com.xu.wake.ui.KelaileGlyphKind
+import com.xu.wake.ui.KelaileShapes
+import com.xu.wake.ui.kelaileMotionEnabled
 
 val SearchPillHeight = 56.dp
 
-internal val SearchPillRadius = XwakeShapes.sheet
+internal val SearchPillRadius = KelaileShapes.sheet
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun SharedTransitionScope.XwakeSearchPill(
+fun SharedTransitionScope.KelaileSearchPill(
     collapsed: Boolean,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val motion = xwakeMotionEnabled()
+    val motion = kelaileMotionEnabled()
     val shape = RoundedCornerShape(SearchPillRadius)
 
     val shared = if (motion) {
@@ -67,7 +67,7 @@ fun SharedTransitionScope.XwakeSearchPill(
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            XwakeGlyph(XwakeGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
+            KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(12.dp))
             Box(Modifier.weight(1f)) {
                 Text(

@@ -8,18 +8,18 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-object XwakeExecutors {
+object KelaileExecutors {
 
     private val cores: Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
 
     val io: ExecutorService = build(
-        name = "xwake-io",
+        name = "kelaile-io",
         size = (cores * 2 + 2).coerceIn(4, 12),
         queueCapacity = 128,
     )
 
     val compute: ExecutorService = build(
-        name = "xwake-compute",
+        name = "kelaile-compute",
         size = cores.coerceIn(2, 6),
         queueCapacity = 32,
     )

@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <application android:label="xwake" android:icon="@mipmap/ic_xwake" android:theme="@style/LaunchTheme" android:networkSecurityConfig="@xml/network_security_config" android:allowBackup="false" android:supportsRtl="true">
+    <application android:label="课来了" android:icon="@mipmap/ic_kelaile" android:theme="@style/LaunchTheme" android:networkSecurityConfig="@xml/network_security_config" android:allowBackup="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:configChanges="orientation|screenSize|smallestScreenSize" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>

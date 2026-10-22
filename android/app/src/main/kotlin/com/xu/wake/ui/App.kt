@@ -33,7 +33,7 @@ import com.xu.wake.domain.ScheduleActions
 import com.xu.wake.ui.glass.GlassHost
 import com.xu.wake.ui.glass.glassSource
 import com.xu.wake.ui.palette.PaletteActions
-import com.xu.wake.ui.search.XwakeSearchOverlay
+import com.xu.wake.ui.search.KelaileSearchOverlay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,7 +43,7 @@ private val dayNames = listOf("星期一", "星期二", "星期三", "星期四"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-fun XwakeApp() {
+fun KelaileApp() {
     val context = LocalContext.current
     val service = remember { com.xu.wake.application.ScheduleService(context) }
     val scope = rememberCoroutineScope()
@@ -172,7 +172,7 @@ fun XwakeApp() {
         if (page != "home" || tab != 0) { immersive = false; systemBars(false) }
     }
     BackHandler(page != "home" && !searchOpen) { page = "home" }
-    XwakeTheme(data.settings.theme, data.settings.fontScale.toFloat(), data.settings.themePalette, data.settings.dynamicColor, data.settings.motionSpeed, data.settings.reduceMotion, data.settings.transitionStyle) {
+    KelaileTheme(data.settings.theme, data.settings.fontScale.toFloat(), data.settings.themePalette, data.settings.dynamicColor, data.settings.motionSpeed, data.settings.reduceMotion, data.settings.transitionStyle) {
         GlassHost {
         var splashVisible by remember { mutableStateOf(true) }
         LaunchedEffect(ready) { if (ready) splashVisible = false }
@@ -181,7 +181,7 @@ fun XwakeApp() {
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
             val hidden = immersive && data.settings.autoHideBars
             if (page == "home" && !overlayDock && !hidden) Column(Modifier.navigationBarsPadding()) {
-                XwakeDock(
+                KelaileDock(
                     data.settings.navigationStyle, tab, { tab = it },
                     Modifier.fillMaxWidth(),
                 )
@@ -224,7 +224,7 @@ fun XwakeApp() {
                                     },
                                     onBrowser = { openBrowser() },
                                     onImportFile = { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) },
-                                    onExportFile = { exportFile.launch("xwake-课表.json") },
+                                    onExportFile = { exportFile.launch("课来了-课表.json") },
                                     onSearch = { searchOpen = true },
                                     onEditSchedule = { editMode = true },
                                     onMoveCourse = { id, day, period ->
@@ -248,7 +248,7 @@ fun XwakeApp() {
                                 )
                                 else SettingsPage(data, settingsScroll, settingsRoute, highlightRequest, searchOpen, { settingsRoute = it }, { candidate -> commit(candidate) }, { editingId = null; page = "course" }, { page = "periods" }, {
                                     openBrowser()
-                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("xwake-课表.json") }, ::toggleReminder, { searchOpen = true }, dockOverlap)
+                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("课来了-课表.json") }, ::toggleReminder, { searchOpen = true }, dockOverlap)
                             }
                         }
                     }
@@ -258,7 +258,7 @@ fun XwakeApp() {
 
 
         if (ready && page == "home" && overlayDock && !(immersive && data.settings.autoHideBars)) {
-            XwakeDock(
+            KelaileDock(
                 data.settings.navigationStyle, tab, { tab = it },
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -266,8 +266,8 @@ fun XwakeApp() {
             )
         }
         if (busy) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha=.12f)).clickable(interactionSource=remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication=null) {}, contentAlignment=Alignment.Center) { CircularProgressIndicator() }
-        XwakeSplash(visible = splashVisible)
-        XwakeSearchOverlay(
+        KelaileSplash(visible = splashVisible)
+        KelaileSearchOverlay(
             visible = searchOpen,
             data = data,
             onDismiss = { searchOpen = false },
@@ -298,7 +298,7 @@ fun XwakeApp() {
                     PaletteActions.EDIT_PERIODS -> page = "periods"
                     PaletteActions.BROWSER_IMPORT -> openBrowser()
                     PaletteActions.IMPORT_FILE -> importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                    PaletteActions.EXPORT_FILE -> exportFile.launch("xwake-课表.json")
+                    PaletteActions.EXPORT_FILE -> exportFile.launch("课来了-课表.json")
                     PaletteActions.TOGGLE_THEME -> toggleTheme()
                     PaletteActions.OPEN_SETTINGS -> { tab = 1; page = "home" }
                 }

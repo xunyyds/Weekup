@@ -26,7 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.xu.wake.data.*
-import com.xu.wake.ui.search.XwakeSearchPill
+import com.xu.wake.ui.search.KelaileSearchPill
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 
@@ -127,11 +127,11 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).then(if(atRoot) Modifier.navigationBarsPadding() else Modifier)) {
                 if(atRoot) {
 
-                    XwakeTopBar(
+                    KelaileTopBar(
                         title = "设置",
                         collapseFraction = if (atRoot) (scroll.value.toFloat() / SETTINGS_COLLAPSE_PX).coerceIn(0f, 1f) else 0f,
                     )
-                    XwakeSearchPill(
+                    KelaileSearchPill(
                         collapsed=!searchExpanded,
                         onOpen=onSearch,
                         modifier=Modifier.padding(horizontal=16.dp).padding(top=2.dp,bottom=10.dp),
@@ -141,7 +141,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                         title={ Text(current.title,maxLines=1) },
                         navigationIcon={
                             IconButton(onClick={ back() },modifier=Modifier.semantics { contentDescription="返回上一级" }) {
-                                XwakeGlyph(XwakeGlyphKind.Back, MaterialTheme.colorScheme.onSurface)
+                                KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface)
                             }
                         },
                         colors=TopAppBarDefaults.topAppBarColors(
@@ -166,7 +166,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                         SettingsItem("上课提醒","通知权限与提前时间") { onRoute(Route.Reminders.key) }
                         SettingsItem("导入与备份","教务浏览器、本地备份") { onRoute(Route.Data.key) }
                     }
-                    Section("关于") { SettingsItem("关于 xwake","版本、系统与开源项目") { onRoute(Route.About.key) } }
+                    Section("关于") { SettingsItem("关于课来了","版本、系统与开源项目") { onRoute(Route.About.key) } }
                     Section("") { SettingsItem("分享应用","打包当前已安装版本，通过系统分享 APK") { shareInstalledApk(context) } }
                 }
                 Route.Appearance -> Section("外观") {
@@ -370,7 +370,7 @@ private val Route.title: String
         Route.Courses -> "课程"
         Route.Reminders -> "上课提醒"
         Route.Data -> "导入与备份"
-        Route.About -> "关于 xwake"
+        Route.About -> "关于课来了"
     }
 
 private val Route.parent: Route

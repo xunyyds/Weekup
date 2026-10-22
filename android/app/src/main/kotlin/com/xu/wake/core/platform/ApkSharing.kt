@@ -30,10 +30,10 @@ object ApkSharing {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "application/vnd.android.package-archive"
                     putExtra(Intent.EXTRA_STREAM, uri)
-                    clipData = ClipData.newRawUri("xwake APK", uri)
+                    clipData = ClipData.newRawUri("课来了 APK", uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                val chooser = Intent.createChooser(send, "分享 xwake 安装包").apply {
+                val chooser = Intent.createChooser(send, "分享课来了安装包").apply {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
@@ -55,7 +55,7 @@ object ApkSharing {
         val directory = File(app.cacheDir, "shared-apk").canonicalFile
         check(directory.parentFile == app.cacheDir.canonicalFile) { "无效的 APK 分享目录" }
         check(directory.isDirectory || directory.mkdirs()) { "无法创建 APK 分享目录" }
-        val destination = File(directory, "xwake-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}-arm64-v8a.apk").canonicalFile
+        val destination = File(directory, "kelaile-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}-arm64-v8a.apk").canonicalFile
         check(destination.parentFile == directory) { "无效的 APK 分享路径" }
         
         val temporary = File.createTempFile("apk-", ".tmp", directory)

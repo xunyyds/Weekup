@@ -4,4 +4,4 @@
   so resource shrinking cannot see it. Keep it explicitly.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@assets/web/xwake_post_bridge.js" />
+    tools:keep="@assets/web/kelaile_post_bridge.js" />

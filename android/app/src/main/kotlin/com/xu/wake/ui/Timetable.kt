@@ -158,7 +158,7 @@ fun Timetable(
     val s = data.settings
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val snapMillis = xwakeMillis(240)
+    val snapMillis = kelaileMillis(240)
     val today = LocalDate.now()
 
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
@@ -218,7 +218,7 @@ fun Timetable(
         scope.launch {
             androidx.compose.animation.core.animate(
                 0f, 1f,
-                animationSpec = tween(durationMillis = snapMillis, easing = XwakeMotion.emphasizedEasing),
+                animationSpec = tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing),
             ) { t, _ ->
                 zoom = z0 + (targetZoom - z0) * t
                 offsetX = x0 + (tx - x0) * t
@@ -232,7 +232,7 @@ fun Timetable(
         val direction = if (week >= slideFrom) 1f else -1f
         slideFrom = week
         slide.snapTo(direction * .30f)
-        slide.animateTo(0f, tween(durationMillis = snapMillis, easing = XwakeMotion.emphasizedEasing))
+        slide.animateTo(0f, tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing))
     }
 
     BackHandler(enabled = editMode) { onEditMode(false) }
@@ -247,7 +247,7 @@ fun Timetable(
     val dragThreshold = with(density) { 52.dp.toPx() }
 
     Column(Modifier.fillMaxSize()) {
-        XwakeTopBar(
+        KelaileTopBar(
             title = "",
             collapseFraction = if (immersive) 1f else (offsetY / (availH * .6f)).coerceIn(0f, 1f),
             modifier = Modifier.graphicsLayer { translationY = if (immersive) -size.height else 0f },
@@ -317,7 +317,7 @@ fun Timetable(
         )
         if (data.courses.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(XwakeSpacing.lg)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KelaileSpacing.lg)) {
                     Text("每一周，都从容一点", style = MaterialTheme.typography.headlineSmall)
                     Text("还没有课程，新增或导入你的课表")
                     Button(onClick = onAdd) { Text("新增课程") }

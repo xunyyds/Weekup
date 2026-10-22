@@ -4,7 +4,7 @@ import android.content.Context
 
                                                                                   
 class SearchHistory(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("xwake_search", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences("kelaile_search", Context.MODE_PRIVATE)
 
     fun items(): List<String> = prefs.getString(KEY, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
 

@@ -209,7 +209,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                                 require(raw.length <= 12_000_000) { "课表页面过大，请打开单独的课表页后重试" }
                                 val decoded = JSONTokener(raw).nextValue()
                                 require(decoded is String && decoded.isNotBlank()) { "当前页面没有可读取的课表 table；请先登录并打开课表页面" }
-                                require(decoded != "XWAKE_TABLE_TOO_LARGE") { "课表页面过大" }
+                                require(decoded != "KELAILE_TABLE_TOO_LARGE") { "课表页面过大" }
                                 SchoolParser.parse(decoded, existingSchool)
                             }
                         } catch (e: Exception) {
@@ -767,10 +767,10 @@ private val VH_HEIGHT_REPAIR_SCRIPT = """
         + '.edu-center{display:flex!important;flex-direction:column!important;height:100%!important;}'
         + '#edu-cm{flex:1 1 auto!important;min-height:0!important;height:auto!important;display:block!important;overflow:hidden!important;}'
         + '#Frame0{display:block!important;width:100%!important;height:100%!important;border:0!important;}';
-      var el = document.getElementById('__xwake_vh_fix');
+      var el = document.getElementById('__kelaile_vh_fix');
       if (!el) {
         el = document.createElement('style');
-        el.id = '__xwake_vh_fix';
+        el.id = '__kelaile_vh_fix';
         host.appendChild(el);
       }
       if (el.textContent !== css) el.textContent = css;
@@ -819,7 +819,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
     if (!host) return 'skip';
     if (!isFixed()) {
       
-      var mine = document.querySelector('meta[data-xwake-viewport]');
+      var mine = document.querySelector('meta[data-kelaile-viewport]');
       if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
       return 'skip';
     }
@@ -828,7 +828,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
       if (!meta) {
         meta = document.createElement('meta');
         meta.setAttribute('name', 'viewport');
-        meta.setAttribute('data-xwake-viewport', '1');
+        meta.setAttribute('data-kelaile-viewport', '1');
         host.appendChild(meta);
       }
       if (meta.getAttribute('content') !== CONTENT) meta.setAttribute('content', CONTENT);
@@ -872,10 +872,10 @@ private val CAS_FIT_SCRIPT = """
       if (!card) return false;
       var host = document.head || document.documentElement;
       if (!host) return false;
-      var el = document.getElementById('__xwake_sso_fit');
+      var el = document.getElementById('__kelaile_sso_fit');
       if (!el) {
         el = document.createElement('style');
-        el.id = '__xwake_sso_fit';
+        el.id = '__kelaile_sso_fit';
         host.appendChild(el);
       }
       if (el.textContent !== CSS) el.textContent = CSS;
@@ -968,7 +968,7 @@ private val TABLE_EXTRACTION = """
       });
     });
     html += table.outerHTML;
-    if (html.length > 2000000) return 'XWAKE_TABLE_TOO_LARGE';
+    if (html.length > 2000000) return 'KELAILE_TABLE_TOO_LARGE';
   }
   return html;
 })()

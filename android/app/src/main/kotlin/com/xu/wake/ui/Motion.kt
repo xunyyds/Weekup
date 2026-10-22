@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collect
 
-object XwakeShapes {
+object KelaileShapes {
 
     val hairline = 2.dp
     val tiny = 4.dp
@@ -69,7 +69,7 @@ object XwakeShapes {
     fun rounded(radius: Dp): Shape = RoundedCornerShape(radius)
 }
 
-object XwakeSpacing {
+object KelaileSpacing {
     val hairline = 2.dp
     val xs = 4.dp
 
@@ -81,7 +81,7 @@ object XwakeSpacing {
     val xxxl = 40.dp
 }
 
-object XwakeElevation {
+object KelaileElevation {
     val card = 4.dp
     val floating = 10.dp
     val dock = 14.dp
@@ -100,7 +100,7 @@ object XwakeElevation {
     )
 }
 
-object XwakeMotion {
+object KelaileMotion {
 
     const val fast = 120
     const val quick = 180
@@ -121,17 +121,17 @@ object XwakeMotion {
     val legacyEasing = FastOutSlowInEasing
 }
 
-private val LocalXwakeMotionEnabled = staticCompositionLocalOf<Boolean?> { null }
+private val LocalKelaileMotionEnabled = staticCompositionLocalOf<Boolean?> { null }
 private val LocalMotionSpeed = staticCompositionLocalOf { 1.0 }
 private val LocalTransitionStyle = staticCompositionLocalOf { "shared" }
 
 @Composable
-internal fun xwakeMillis(base: Int): Int =
+internal fun kelaileMillis(base: Int): Int =
     (base / LocalMotionSpeed.current).toInt().coerceAtLeast(1)
 
 @Composable
-internal fun xwakeStaggerDelay(index: Int): Int =
-    xwakeMillis(XwakeMotion.staggerStep * index.coerceIn(0, XwakeMotion.staggerMax))
+internal fun kelaileStaggerDelay(index: Int): Int =
+    kelaileMillis(KelaileMotion.staggerStep * index.coerceIn(0, KelaileMotion.staggerMax))
 
 @Composable
 private fun systemMotionEnabled(): Boolean {
@@ -163,8 +163,8 @@ private fun systemMotionEnabled(): Boolean {
 }
 
 @Composable
-internal fun xwakeMotionEnabled(): Boolean =
-    LocalXwakeMotionEnabled.current ?: systemMotionEnabled()
+internal fun kelaileMotionEnabled(): Boolean =
+    LocalKelaileMotionEnabled.current ?: systemMotionEnabled()
 
 private fun darkScheme() = darkColorScheme(
     primary = Color(0xFF91B7FF),
@@ -205,7 +205,7 @@ private fun lightScheme() = lightColorScheme(
 )
 
 @Composable
-fun XwakeTheme(
+fun KelaileTheme(
     theme: String = "system",
     fontScale: Float = 1f,
     palette: String = "blue",
@@ -247,7 +247,7 @@ fun XwakeTheme(
     val enabled = systemMotionEnabled()
     CompositionLocalProvider(
         LocalDensity provides Density(density.density, density.fontScale * multiplier),
-        LocalXwakeMotionEnabled provides (enabled && !reduceMotion),
+        LocalKelaileMotionEnabled provides (enabled && !reduceMotion),
         LocalMotionSpeed provides motionSpeed.coerceIn(.5, 2.0),
         LocalTransitionStyle provides transitionStyle,
     ) {
@@ -261,10 +261,10 @@ fun MotionContent(
     modifier: Modifier = Modifier,
     content: @Composable (String) -> Unit,
 ) {
-    val enabled = xwakeMotionEnabled()
+    val enabled = kelaileMotionEnabled()
     val style = LocalTransitionStyle.current
-    val enterMillis = xwakeMillis(if (style == "fade") XwakeMotion.quick else XwakeMotion.emphasized)
-    val exitMillis = xwakeMillis(XwakeMotion.quick)
+    val enterMillis = kelaileMillis(if (style == "fade") KelaileMotion.quick else KelaileMotion.emphasized)
+    val exitMillis = kelaileMillis(KelaileMotion.quick)
     AnimatedContent(
         targetState = target,
         modifier = modifier,
@@ -273,27 +273,27 @@ fun MotionContent(
             when {
                 !enabled -> (EnterTransition.None togetherWith ExitTransition.None).using(null)
                 style == "fade" -> (
-                    fadeIn(tween(enterMillis, easing = XwakeMotion.standardEasing)) togetherWith
-                        fadeOut(tween(exitMillis, easing = XwakeMotion.accelerateEasing))
+                    fadeIn(tween(enterMillis, easing = KelaileMotion.standardEasing)) togetherWith
+                        fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
                     ).using(null)
                 else -> {
                     val direction = if (targetState >= initialState) 1 else -1
                     val travel = if (style == "standard") .12f else .06f
 
                     val enter = slideInHorizontally(
-                        tween(enterMillis, easing = XwakeMotion.emphasizedEasing),
+                        tween(enterMillis, easing = KelaileMotion.emphasizedEasing),
                     ) { (it * travel * direction).toInt() } +
-                        fadeIn(tween(enterMillis / 3, easing = XwakeMotion.standardEasing))
+                        fadeIn(tween(enterMillis / 3, easing = KelaileMotion.standardEasing))
                     val exit = slideOutHorizontally(
-                        tween(exitMillis, easing = XwakeMotion.accelerateEasing),
+                        tween(exitMillis, easing = KelaileMotion.accelerateEasing),
                     ) { (-it * travel * direction).toInt() } +
-                        fadeOut(tween(exitMillis / 2, easing = XwakeMotion.accelerateEasing))
+                        fadeOut(tween(exitMillis / 2, easing = KelaileMotion.accelerateEasing))
                     (enter togetherWith exit).using(
                         SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() }),
                     )
                 }
             }
         },
-        label = "Xwake shared axis",
+        label = "Kelaile shared axis",
     ) { destination -> content(destination) }
 }
