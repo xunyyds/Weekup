@@ -10,9 +10,9 @@
 | 代码标识前缀 | `Kelaile`（`KelaileApp`、`KelaileTheme`、`KelaileExecutors` …） |
 | 资源命名 | `ic_kelaile`（资源名只能是 ASCII 小写） |
 | 包名 / `applicationId` | `com.xunyyds.kelaile` |
-| 线程 / 日志 / 偏好文件名 | 中文：`课来了-IO`、`课来了-计算`、`课来了-提醒`、`课来了_搜索` |
+| 线程 / 日志 / 偏好文件名 | 英文：`kelaile-io`、`kelaile-compute`、`kelaile-reminders`、`KelaileReminders`、`kelaile_search` |
 | 只能留 ASCII 的 | Uri scheme `kelaile://reminder/`、WebView 注入节点 `__kelaile_*`、JS 哨兵 `KELAILE_TABLE_TOO_LARGE`、共享元素 key、Gradle `rootProject.name` |
-| 签名密钥 | `D:/dev/xwake-signing`、`keyAlias = "xwake"`（密钥库未迁移，改别名会导致签名不一致） |
+| 签名密钥 | `D:/dev/kelaile-signing`（PKCS12、alias `kelaile`、RSA 4096）；旧的 `D:/dev/xwake-signing` 只为旧包 `com.xu.wake` 保留，勿删 |
 
 ## 环境
 
@@ -32,7 +32,7 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:assembleRelease
 ```
 
-需在 `android/local.properties` 指定 `sdk.dir`。Release 使用本地密钥 `D:/dev/xwake-signing`（密钥与密码不入库，沿用原目录与 alias），开启 R8 与资源缩减。
+需在 `android/local.properties` 指定 `sdk.dir`。Release 使用本地密钥 `D:/dev/kelaile-signing`（密钥与密码不入库），开启 R8 与资源缩减。
 
 产物：`android/app/build/outputs/apk/release/app-release.apk`。
 
