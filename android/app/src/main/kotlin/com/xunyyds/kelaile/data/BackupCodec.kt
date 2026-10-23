@@ -20,6 +20,12 @@ object BackupCodec {
             put("currentWeek", s.currentWeek); put("weekCount", s.weekCount)
             put("defaultColor", s.defaultColor); put("reminderMinutes", s.reminderMinutes); put("reminders", s.reminders)
             put("gradeLabel", s.gradeLabel)
+            put("timetableBackground", s.timetableBackground)
+            put("tableHeaderColor", s.tableHeaderColor); put("cellBackgroundColor", s.cellBackgroundColor)
+            put("cellTextColor", s.cellTextColor); put("gridLineColor", s.gridLineColor)
+            put("gridLineStyle", s.gridLineStyle); put("cellVerticalAlign", s.cellVerticalAlign)
+            put("showAtSign", s.showAtSign); put("showTeacher", s.showTeacher)
+            put("skippedVersion", s.skippedVersion)
             put("start", "${s.start}T00:00:00.000"); put("end", "${s.end}T00:00:00.000")
             put("periods", JSONArray().apply { s.periods.forEach { p -> put(JSONObject().put("period", p.period).put("startMinutes", p.startMinutes).put("endMinutes", p.endMinutes)) } })
         }
@@ -27,7 +33,8 @@ object BackupCodec {
             .put("courses", JSONArray().apply { data.courses.forEach { c ->
                 put(JSONObject().put("id", c.id).put("name", c.name).put("weekday", c.weekday)
                     .put("startPeriod", c.startPeriod).put("endPeriod", c.endPeriod)
-                    .put("weeks", JSONArray(c.weeks.distinct().sorted())).put("teacher", c.teacher).put("location", c.location))
+                    .put("weeks", JSONArray(c.weeks.distinct().sorted())).put("teacher", c.teacher).put("location", c.location)
+                    .put("note", c.note))
             } }).put("colors", JSONObject(data.colors)).toString().also { require(it.length <= MAX_CHARS) { "课表文件过大" } }
     }
 
@@ -67,6 +74,18 @@ object BackupCodec {
                 gradeLabel = j.string("gradeLabel", defaults.gradeLabel).take(12),
                 themePalette = j.string("themePalette", defaults.themePalette),
                 dynamicColor = if (j.has("dynamicColor")) (j.get("dynamicColor") as? Boolean ?: error("dynamicColor 必须为布尔值")) else defaults.dynamicColor,
+                timetableBackground = j.string("timetableBackground", defaults.timetableBackground),
+                tableHeaderColor = j.colorOr("tableHeaderColor", defaults.tableHeaderColor),
+                cellBackgroundColor = j.colorOr("cellBackgroundColor", defaults.cellBackgroundColor),
+                cellTextColor = j.colorOr("cellTextColor", defaults.cellTextColor),
+                gridLineColor = j.colorOr("gridLineColor", defaults.gridLineColor),
+                gridLineStyle = j.string("gridLineStyle", defaults.gridLineStyle)
+                    .let { if (it in GRID_LINE_STYLES) it else defaults.gridLineStyle },
+                cellVerticalAlign = j.string("cellVerticalAlign", defaults.cellVerticalAlign)
+                    .let { if (it in CELL_VERTICAL_ALIGNS) it else defaults.cellVerticalAlign },
+                showAtSign = j.flag("showAtSign", defaults.showAtSign),
+                showTeacher = j.flag("showTeacher", defaults.showTeacher),
+                skippedVersion = j.string("skippedVersion", defaults.skippedVersion).take(SKIPPED_VERSION_MAX),
             )
             val array = root.getJSONArray("courses")
             val courses = (0 until array.length()).map { i ->
@@ -74,7 +93,8 @@ object BackupCodec {
                 val weeks = c.getJSONArray("weeks")
                 CourseSession(c.string("id"), c.string("name"), c.integer("weekday"), c.integer("startPeriod"), c.integer("endPeriod"),
                     (0 until weeks.length()).map { n -> exactLong(weeks.get(n)).also { require(it in 1..60) }.toInt() }.distinct().sorted(),
-                    c.string("teacher", ""), c.string("location", ""))
+                    c.string("teacher", ""), c.string("location", ""),
+                    c.string("note", "").take(NOTE_MAX))
             }
             val colors = if (!root.has("colors")) emptyMap() else root.getJSONObject("colors").let { c ->
                 c.keys().asSequence().associateWith { exactLong(c.get(it)) }
@@ -95,6 +115,10 @@ object BackupCodec {
         return (value as Number).toLong()
     }
     private fun JSONObject.integer(key: String): Int = exactLong(get(key)).also { require(it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) }.toInt()
+    private fun JSONObject.colorOr(key: String, default: Long): Long =
+        if (!has(key)) default else exactLong(get(key)).also { require(it == GRID_COLOR_AUTO || it in 0..0xffffffffL) { "$key 不是有效颜色" } }
+    private fun JSONObject.flag(key: String, default: Boolean): Boolean =
+        if (!has(key)) default else (get(key) as? Boolean ?: error("$key 必须为布尔值"))
     private fun JSONObject.intOr(key: String, default: Int) = if (has(key)) integer(key) else default
     private fun JSONObject.longOr(key: String, default: Long) = if (has(key)) exactLong(get(key)) else default
     private fun JSONObject.string(key: String): String = get(key) as? String ?: error("$key 必须为字符串")

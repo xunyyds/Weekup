@@ -60,6 +60,19 @@ data class AppSettings(
 
     val autoHideBars: Boolean = false,
     val gradeLabel: String = "大一",
+
+    val timetableBackground: String = "",
+    val tableHeaderColor: Long = GRID_COLOR_AUTO,
+    val cellBackgroundColor: Long = GRID_COLOR_AUTO,
+    val cellTextColor: Long = GRID_COLOR_AUTO,
+    val gridLineColor: Long = GRID_COLOR_AUTO,
+    val gridLineStyle: String = GRID_LINE_DASHED,
+    val cellVerticalAlign: String = CELL_VERTICAL_TOP,
+
+    val showAtSign: Boolean = false,
+    val showTeacher: Boolean = false,
+
+    val skippedVersion: String = "",
 ) {
     init {
         require(firstDay in 1..7 && lastDay in firstDay..7 && weekStart in 1..7)
@@ -76,8 +89,36 @@ data class AppSettings(
         require(periods.isNotEmpty() && periods.map { it.period }.distinct().size == periods.size)
         val ordered = periods.sortedBy { it.period }
         require(ordered.zipWithNext().all { (a, b) -> a.endMinutes <= b.startMinutes }) { "节次时间重叠" }
+        require(gridLineStyle in GRID_LINE_STYLES) { "网格线样式无效" }
+        require(cellVerticalAlign in CELL_VERTICAL_ALIGNS) { "格内竖直对齐方式无效" }
+        require(
+            listOf(tableHeaderColor, cellBackgroundColor, cellTextColor, gridLineColor)
+                .all { it == GRID_COLOR_AUTO || it in 0..0xffffffffL }
+        ) { "无效的课表颜色" }
+        require(timetableBackground.length <= TIMETABLE_BACKGROUND_MAX) { "课程表背景路径过长" }
+        require(skippedVersion.length <= SKIPPED_VERSION_MAX) { "版本号过长" }
     }
 }
+
+const val GRID_COLOR_AUTO = -1L
+
+const val GRID_LINE_DASHED = "dashed"
+const val GRID_LINE_TRANSPARENT = "transparent"
+const val GRID_LINE_NONE = "none"
+
+val GRID_LINE_STYLES: List<String> = listOf(GRID_LINE_DASHED, GRID_LINE_TRANSPARENT, GRID_LINE_NONE)
+
+const val CELL_VERTICAL_TOP = "top"
+const val CELL_VERTICAL_CENTER = "center"
+const val CELL_VERTICAL_BOTTOM = "bottom"
+
+val CELL_VERTICAL_ALIGNS: List<String> = listOf(CELL_VERTICAL_TOP, CELL_VERTICAL_CENTER, CELL_VERTICAL_BOTTOM)
+
+const val TIMETABLE_BACKGROUND_MAX = 900
+
+const val SKIPPED_VERSION_MAX = 40
+
+fun gridColorResolved(value: Long, fallback: Long): Long = if (value == GRID_COLOR_AUTO) fallback else value
 
 data class CourseSession(
     val id: String,
@@ -88,13 +129,17 @@ data class CourseSession(
     val weeks: List<Int>,
     val teacher: String = "",
     val location: String = "",
+    val note: String = "",
 ) {
     init {
         require(id.isNotBlank() && name.isNotBlank() && weekday in 1..7)
         require(startPeriod in 1..100 && endPeriod in startPeriod..100)
         require(weeks.isNotEmpty() && weeks.all { it in 1..60 }) { "无效的课程周次" }
+        require(note.length <= NOTE_MAX) { "备注最多 $NOTE_MAX 个字" }
     }
 }
+
+const val NOTE_MAX = 500
 
 data class AppData(
     val settings: AppSettings = AppSettings(),
