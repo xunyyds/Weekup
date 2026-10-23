@@ -16,6 +16,7 @@
 |---|---|
 | `schedule` | 课表与排课 |
 | `import` | 导入（教务 / 表格） |
+| `update` | 更新检测、下载与安装 |
 | `dock` | 底栏 |
 | `topbar` | 顶栏 |
 | `settings` | 设置 |

@@ -57,11 +57,11 @@ implementation("org.jsoup:jsoup:1.18.3")
 
 测试依赖：`junit:junit:4.13.2`、`org.json:json`（JVM 适配）。
 
-未引入：Room、Ktor/OkHttp、图片加载库、图标全集、额外动效库。通知、文件、时区、网络（`HttpURLConnection`）、WebView 与 xlsx 解包均走平台 API。
+未引入：Room、Ktor/OkHttp、图片加载库、图标全集、额外动效库。通知、文件、时区、网络（`HttpURLConnection`）、WebView、xlsx 解包与生成、Markdown 渲染均走平台 API 或自写实现。
 
 ## 架构
 
-源码根 `android/app/src/main/kotlin/com/xu/wake/`，按职责分层，依赖单向向下：
+源码根 `android/app/src/main/kotlin/com/xunyyds/kelaile/`，按职责分层，依赖单向向下：
 
 ```
 ui/           Compose 页面与交互
@@ -76,10 +76,24 @@ ui/            App 顶层导航、Timetable、Settings、Browser、TopBar、Moti
                glass/     液态玻璃透镜（RenderEffect + RuntimeShader）
                search/    全屏搜索：SearchIndex 索引、SearchOverlay 面板、SearchPill 入口
                palette/   命令候选条目
+               update/    更新弹窗、流程控制器与 Markdown 渲染
 domain/        ScheduleActions —— 无 Android 依赖的纯函数
 application/   ScheduleService —— 串行化读写 + 提醒同步
-data/          Models、Repository、BackupCodec、SchoolParser、XlsxReader、XlsxTimetable
+data/          Models、Repository、BackupCodec、SchoolParser、XlsxReader、XlsxTimetable、XlsxWriter
                WeekDates（周次与真实日期换算）、Reminders、ReminderPlan
+               VersionRules（版本与强制更新）、ReleaseInfo、UpdateSource（包选取与镜像）、TransferMeter
 core/          concurrent/KelaileExecutors、platform/（APK 分享、链接、元数据）、prefs/
+               update/    UpdateClient（Release 查询与下载）、ApkVerifier、ApkInstaller
 ```
+
+## 更新
+
+更新走 GitHub Release：`api.github.com/repos/xunyyds/kelaile/releases/latest`，只认正式版，
+`tag_name` 去掉 `v` 后与当前版本比较。安装包从 `assets` 中优先选 `.apk`；下载先直连，
+失败后按序尝试镜像（`gh.07150721.xyz`、`ghpxy.hwinzniej.top`、`ghf.无名氏.top`、
+`gh.chjina.com`、`js.jiangss.shop`、`ghproxy.icu`，主机名做 `IDN.toASCII`）。
+
+启动时静默检查一次：失败只在「关于与更新」页显示红字，不弹窗；发现新版本则弹更新弹窗。
+「此版本不再提示」最多延迟 3 个正式版本，达到阈值后强制更新且不可跳过。规则集中在
+`VersionRules`，安装包选取与镜像集中在 `UpdateSource`。
 
