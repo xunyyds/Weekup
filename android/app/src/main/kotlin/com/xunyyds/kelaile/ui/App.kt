@@ -34,6 +34,8 @@ import com.xunyyds.kelaile.ui.glass.GlassHost
 import com.xunyyds.kelaile.ui.glass.glassSource
 import com.xunyyds.kelaile.ui.palette.PaletteActions
 import com.xunyyds.kelaile.ui.search.KelaileSearchOverlay
+import com.xunyyds.kelaile.ui.update.UpdateDialog
+import com.xunyyds.kelaile.ui.update.rememberUpdateController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -84,6 +86,12 @@ fun KelaileApp() {
         }
     }
 
+    val update = rememberUpdateController(
+        currentVersion = appVersionName(context),
+        skippedVersion = data.settings.skippedVersion,
+        onSkip = { version -> commit(data.copy(settings = data.settings.copy(skippedVersion = version)), {}) },
+    )
+
     var pendingMove by remember { mutableStateOf<Triple<String, String, Pair<Int, Int>>?>(null) }
 
     var offerPeriodEdit by remember { mutableStateOf(false) }
@@ -91,6 +99,15 @@ fun KelaileApp() {
     val density = LocalDensity.current
     val dockOverlap = if (data.settings.navigationStyle == "default") 0.dp
         else with(density) { dockHeightPx.toDp() } + 10.dp
+
+    var undoStack by remember { mutableStateOf<List<AppData>>(emptyList()) }
+    fun pushUndo() { undoStack = (undoStack + data).takeLast(UNDO_LIMIT) }
+    fun undo() {
+        val previous = undoStack.lastOrNull() ?: return
+        undoStack = undoStack.dropLast(1)
+        commit(previous)
+    }
+
     fun applyMove(move: Triple<String, String, Pair<Int, Int>>, mode: ScheduleActions.MoveMode) {
         val (kind, id, ends) = move
         val next = when (kind) {
@@ -98,6 +115,7 @@ fun KelaileApp() {
             "day" -> ScheduleActions.moveDay(data, ends.first, ends.second, mode)
             else -> ScheduleActions.moveRow(data, ends.first, ends.second, mode)
         }
+        pushUndo()
         commit(next)
     }
     fun requestMove(kind: String, id: String, ends: Pair<Int, Int>, conflict: Boolean) {
@@ -111,37 +129,73 @@ fun KelaileApp() {
         catch (e: Exception) { startupError = "本地课表读取失败，原文件未覆盖：${e.message}" }
         ready = true
     }
-    val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+
+    LaunchedEffect(ready) {
+        if (ready && startupError == null) update.checkSilently()
+    }
+
+    /** 进入排课编辑模式时的快照，「回退」恢复到这一刻。 */
+    var editSnapshot by remember { mutableStateOf<AppData?>(null) }
+    fun enterEditMode(on: Boolean) {
+        if (on && editSnapshot == null) editSnapshot = data
+        if (!on) editSnapshot = null
+        editMode = on
+    }
+    fun revertEdit() {
+        val snapshot = editSnapshot ?: return
+        if (snapshot == data) { message("课表没有变化"); return }
+        pushUndo()
+        commit(snapshot) { editSnapshot = snapshot }
+        message("已回退到进入编辑模式前的课表")
+    }
+    val importTimetable = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null && !busy) scope.launch {
             busy = true
             try {
-
-                val (backup, sheet) = service.readImport(uri)
-                if (sheet != null) {
-                    commit(ScheduleActions.importSchool(data, sheet))
-                    message("已从表格导入 ${sheet.courses.size} 门课程")
-                    busy = false
-                    return@launch
-                }
-                val candidate = backup ?: error("无法读取文件")
-                if (startupError != null) {
-                    val result = service.save(candidate,recovery=true)
-                    data = result.data
-                    startupError = null
-                    if(result.reminderFailed) message("备份已恢复，但提醒排期失败，请检查权限")
-                    busy = false
-                    message("已从备份恢复，损坏原文件已保留")
-                } else {
-                    busy = false
-                    commit(candidate)
-                }
-            } catch (e: Exception) { busy = false; message("导入失败：${e.message}") }
+                val sheet = service.readTimetable(uri)
+                commit(ScheduleActions.importSchool(data, sheet))
+                message("已导入 ${sheet.courses.size} 门课程")
+            } catch (e: Exception) { message("课表导入失败：${e.message ?: "无法读取表格"}") }
+            finally { busy = false }
         }
     }
-    val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportTimetable = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(XLSX_MIME)) { uri ->
         if (uri != null) scope.launch {
-            try { service.export(uri,data); message("课表已导出") }
+            try { service.exportTimetable(uri, data); message("课表已导出为 Excel") }
             catch (e: Exception) { message("导出失败：${e.message}") }
+        }
+    }
+    val importBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && !busy) scope.launch {
+            busy = true
+            try {
+                val candidate = service.readAppBackup(uri)
+                if (startupError != null) {
+                    val result = service.save(candidate, recovery = true)
+                    data = result.data
+                    startupError = null
+                    if (result.reminderFailed) message("备份已恢复，但提醒排期失败，请检查权限")
+                    message("已从备份恢复，损坏原文件已保留")
+                } else {
+                    commit(candidate)
+                    message("已从备份恢复全部数据")
+                }
+            } catch (e: Exception) { message("恢复失败：${e.message}") }
+            finally { busy = false }
+        }
+    }
+    val exportBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            try { service.exportBackup(uri, data); message("应用数据已备份") }
+            catch (e: Exception) { message("备份失败：${e.message}") }
+        }
+    }
+    val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                val path = copyBackground(context, uri)
+                commit(data.copy(settings = data.settings.copy(timetableBackground = path))) { message("已应用课程表背景") }
+            } catch (e: Exception) { message("设置背景失败：${e.message ?: "无法读取图片"}") }
         }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
@@ -188,7 +242,7 @@ fun KelaileApp() {
                 MotionContent(page, Modifier.weight(1f)) { route ->
                     when (route) {
                         "course" -> CourseEditor(editing, data.settings, editing?.let { data.colors[it.id] } ?: data.settings.defaultColor, { page = "home" }) { course, color ->
-                            try { commit(com.xunyyds.kelaile.domain.ScheduleActions.saveCourse(data,course,color)) { page = "home" } }
+                            try { pushUndo(); commit(com.xunyyds.kelaile.domain.ScheduleActions.saveCourse(data,course,color)) { page = "home" } }
                             catch (e: Exception) { message(e.message ?: "课程参数无效") }
                         }
                         "periods" -> PeriodEditor(data.settings, { page = "home" }) { periods ->
@@ -218,10 +272,10 @@ fun KelaileApp() {
                                         systemBars(hidden && data.settings.autoHideBars)
                                     },
                                     onBrowser = { openBrowser() },
-                                    onImportFile = { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) },
-                                    onExportFile = { exportFile.launch("课来了-课表.json") },
+                                    onImportFile = { importTimetable.launch(XLSX_MIME_TYPES) },
+                                    onExportFile = { exportTimetable.launch("课来了-课表.xlsx") },
                                     onSearch = { searchOpen = true },
-                                    onEditSchedule = { editMode = true },
+                                    onEditSchedule = { enterEditMode(true) },
                                     onMoveCourse = { id, day, period ->
                                         val course = data.courses.firstOrNull { it.id == id }
                                         if (course != null) {
@@ -239,11 +293,32 @@ fun KelaileApp() {
                                         requestMove("row", "", from to to, ScheduleActions.hasRowConflict(data, to))
                                     },
                                     editMode = editMode,
-                                    onEditMode = { editMode = it },
+                                    onEditMode = { enterEditMode(it) },
+                                    canUndo = undoStack.isNotEmpty(),
+                                    onUndo = { undo() },
+                                    onRevert = { revertEdit() },
                                 )
-                                else SettingsPage(data, settingsScroll, settingsRoute, highlightRequest, searchOpen, { settingsRoute = it }, { candidate -> commit(candidate) }, { editingId = null; page = "course" }, { page = "periods" }, {
-                                    openBrowser()
-                                }, { importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }, { exportFile.launch("课来了-课表.json") }, ::toggleReminder, { searchOpen = true }, dockOverlap)
+                                else SettingsPage(
+                                    data = data,
+                                    scroll = settingsScroll,
+                                    route = settingsRoute,
+                                    highlightRequest = highlightRequest,
+                                    searchExpanded = searchOpen,
+                                    onRoute = { settingsRoute = it },
+                                    onChange = { candidate -> commit(candidate) },
+                                    onAdd = { editingId = null; page = "course" },
+                                    onPeriods = { page = "periods" },
+                                    onBrowser = { openBrowser() },
+                                    onImportTimetable = { importTimetable.launch(XLSX_MIME_TYPES) },
+                                    onExportTimetable = { exportTimetable.launch("课来了-课表.xlsx") },
+                                    onImportBackup = { importBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                                    onExportBackup = { exportBackup.launch("课来了-备份.json") },
+                                    onReminder = ::toggleReminder,
+                                    onSearch = { searchOpen = true },
+                                    update = update,
+                                    onPickBackground = { pickBackground.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                    bottomInset = dockOverlap,
+                                )
                             }
                         }
                     }
@@ -261,6 +336,48 @@ fun KelaileApp() {
         }
         if (busy) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha=.12f)).clickable(interactionSource=remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication=null) {}, contentAlignment=Alignment.Center) { CircularProgressIndicator() }
         KelaileSplash(visible = splashVisible)
+        var confirmInstall by remember { mutableStateOf(false) }
+        update.dialogInfo?.let { info ->
+            UpdateDialog(
+                info = info,
+                asset = update.dialogAsset,
+                currentVersion = appVersionName(context),
+                forced = update.dialogForced,
+                stage = update.stage,
+                progress = update.progress,
+                error = update.errorText,
+                stageLabel = update.stageLabel,
+                onDismiss = { update.dismissDialog() },
+                onUpdate = { update.startDownload() },
+                onSkipVersion = { update.skipCurrentVersion() },
+                onCancelDownload = { update.cancelDownload() },
+                onRetry = { update.retry() },
+                onInstall = { confirmInstall = true },
+                onOpenReleasePage = { runCatching { com.xunyyds.kelaile.core.platform.AppPlatform.openLink(context, com.xunyyds.kelaile.data.UpdateSource.RELEASE_PAGE) } },
+            )
+        }
+        if (confirmInstall) AlertDialog(
+            onDismissRequest = { confirmInstall = false },
+            title = { Text("开始安装？") },
+            text = { Text("安装将关闭应用，是否继续？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmInstall = false
+                    if (update.install()) {
+                        (context as? android.app.Activity)?.finish()
+                    }
+                }) { Text("继续安装") }
+            },
+            dismissButton = { TextButton(onClick = { confirmInstall = false }) { Text("取消") } },
+        )
+        update.notice?.let { notice ->
+            AlertDialog(
+                onDismissRequest = { update.dismissNotice() },
+                title = { Text(if (notice.startsWith("已是最新")) "已是最新版本" else "更新失败") },
+                text = { Text(notice) },
+                confirmButton = { TextButton(onClick = { update.dismissNotice() }) { Text("好") } },
+            )
+        }
         KelaileSearchOverlay(
             visible = searchOpen,
             data = data,
@@ -290,8 +407,8 @@ fun KelaileApp() {
                     PaletteActions.NEW_COURSE -> { editingId = null; page = "course" }
                     PaletteActions.EDIT_PERIODS -> page = "periods"
                     PaletteActions.BROWSER_IMPORT -> openBrowser()
-                    PaletteActions.IMPORT_FILE -> importFile.launch(arrayOf("application/json","text/plain","application/octet-stream","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                    PaletteActions.EXPORT_FILE -> exportFile.launch("课来了-课表.json")
+                    PaletteActions.IMPORT_FILE -> importTimetable.launch(XLSX_MIME_TYPES)
+                    PaletteActions.EXPORT_FILE -> exportTimetable.launch("课来了-课表.xlsx")
                     PaletteActions.TOGGLE_THEME -> toggleTheme()
                     PaletteActions.OPEN_SETTINGS -> { tab = 1; page = "home" }
                 }
@@ -327,6 +444,8 @@ fun KelaileApp() {
         }
         details?.let { course ->
             var confirmDelete by remember { mutableStateOf(false) }
+            var noteDraft by remember(course.id) { mutableStateOf(course.note) }
+            var editingNote by remember(course.id) { mutableStateOf(false) }
             ModalBottomSheet(onDismissRequest = { details = null }) {
                 Column(Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(course.name, style = MaterialTheme.typography.headlineSmall)
@@ -335,13 +454,78 @@ fun KelaileApp() {
 
                     val span = if (from != null && to != null && to > from) "\n时间：${clock(from)}—${clock(to)}" else ""
                     Text("教师：${course.teacher}\n地点：${course.location}\n${dayNames[course.weekday-1]} · 第 ${course.startPeriod}—${course.endPeriod} 节$span\n周次：${course.weeks.joinToString("、")}")
+
+                    Section("备注") {
+                        if (editingNote) {
+                            OutlinedTextField(
+                                value = noteDraft,
+                                onValueChange = { noteDraft = it.take(NOTE_MAX) },
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                minLines = 3,
+                                label = { Text("课程备注（最多 $NOTE_MAX 字）") },
+                            )
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { noteDraft = course.note; editingNote = false }) { Text("取消") }
+                                TextButton(onClick = {
+                                    pushUndo()
+                                    commit(ScheduleActions.setNote(data, course.id, noteDraft)) { details = null }
+                                }) { Text("保存备注") }
+                            }
+                        } else {
+                            val shown = course.note.ifBlank { "还没有备注，点击添加" }
+                            Text(
+                                shown,
+                                Modifier.fillMaxWidth().clickable { editingNote = true }.padding(16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (course.note.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            )
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { editingNote = true }) { Text(if (course.note.isBlank()) "添加备注" else "编辑备注") }
+                            }
+                        }
+                    }
+
                     Row { Button(onClick = { editingId = course.id; details = null; page = "course" }) { Text("编辑课程") }; TextButton(onClick = { confirmDelete = true }) { Text("删除课程") } }
                     Spacer(Modifier.height(20.dp))
                 }
             }
-            if(confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("删除课程？") }, text = { Text("此操作会删除 ${course.name}，建议先导出备份。") }, confirmButton = { TextButton(onClick = { commit(com.xunyyds.kelaile.domain.ScheduleActions.deleteCourse(data,course.id)) { details = null } }) { Text("删除") } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } })
+            if(confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("删除课程？") }, text = { Text("此操作会删除 ${course.name}，建议先导出备份。") }, confirmButton = { TextButton(onClick = { pushUndo(); commit(com.xunyyds.kelaile.domain.ScheduleActions.deleteCourse(data,course.id)) { details = null } }) { Text("删除") } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } })
         }
         }
     }
     }
 }
+
+private const val UNDO_LIMIT = 20
+
+private const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+private val XLSX_MIME_TYPES = arrayOf(XLSX_MIME)
+
+/** 当前安装的版本名。用于更新比较，读取失败时回退到「0」。 */
+internal fun appVersionName(context: android.content.Context): String = runCatching {
+    context.applicationContext.packageManager
+        .getPackageInfo(context.applicationContext.packageName, 0)
+        .versionName
+}.getOrNull()?.takeIf { it.isNotBlank() } ?: "0"
+
+/** 把用户选择的背景图复制到应用私有目录，避免外部授权失效后图片消失。 */
+private suspend fun copyBackground(context: android.content.Context, uri: android.net.Uri): String =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val app = context.applicationContext
+        val directory = java.io.File(app.filesDir, "backgrounds")
+        check(directory.isDirectory || directory.mkdirs()) { "无法创建背景目录" }
+        directory.listFiles()?.forEach { if (it.isFile) it.delete() }
+        val target = java.io.File(directory, "timetable-${System.currentTimeMillis()}.img")
+        val input = app.contentResolver.openInputStream(uri) ?: error("无法读取所选图片")
+        input.use { source ->
+            target.outputStream().use { output ->
+                source.copyTo(output, bufferSize = 64 * 1024)
+            }
+        }
+        check(target.length() in 1..(24L * 1024 * 1024)) {
+            target.delete()
+            "图片过大，请选择 24 MB 以内的图片"
+        }
+        target.absolutePath
+    }
