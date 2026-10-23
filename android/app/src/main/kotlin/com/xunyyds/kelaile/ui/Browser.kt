@@ -884,7 +884,7 @@ private val TABLE_EXTRACTION = """
         try { sub = f.contentDocument } catch (e) { sub = null; }
         if (sub) collectTables(sub, acc);
       });
-    } catch (e) { /* cross-origin frame: skip */ }
+    } catch (e) { }
     return acc;
   }
   var tables = collectTables(document, []).filter(function(t) {
@@ -899,7 +899,7 @@ private val TABLE_EXTRACTION = """
       Array.from(e.attributes).forEach(function(a) {
         var key = a.name.toLowerCase();
         if (key === 'class' && e.classList.contains('kbcontent')) e.setAttribute('class', 'kbcontent');
-        else if (key === 'title' && ['老师','教师','教室','地点'].indexOf(a.value) >= 0) { /* parser labels only */ }
+        else if (key === 'title' && ['老师','教师','教室','地点'].indexOf(a.value) >= 0) { }
         else if (key !== 'rowspan' && key !== 'colspan') e.removeAttribute(a.name);
       });
     });
