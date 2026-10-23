@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -42,8 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xunyyds.kelaile.data.*
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import kotlin.math.abs
@@ -104,6 +107,99 @@ internal fun projectWeek(
 internal fun clock(minutes: Int): String =
     (minutes / 60).toString().padStart(2, '0') + ":" + (minutes % 60).toString().padStart(2, '0')
 
+/**
+ * 课表配色。各项都允许「跟随主题」：值为 [GRID_COLOR_AUTO] 时回退到当前 Material 配色，
+ * 因此新增设置不会改变默认观感，深色与浅色主题都自然成立。
+ */
+internal data class GridPalette(
+    val header: Color,
+    val cell: Color,
+    val ink: Color,
+    val line: Color,
+    val lineStyle: String,
+)
+
+@Composable
+internal fun rememberGridPalette(settings: AppSettings): GridPalette {
+    val scheme = MaterialTheme.colorScheme
+    return remember(
+        settings.tableHeaderColor,
+        settings.cellBackgroundColor,
+        settings.cellTextColor,
+        settings.gridLineColor,
+        settings.gridLineStyle,
+        scheme,
+    ) {
+        fun resolve(value: Long, fallback: Color) =
+            if (value == GRID_COLOR_AUTO) fallback else Color(value)
+        GridPalette(
+            header = resolve(settings.tableHeaderColor, scheme.surfaceContainerLow),
+            cell = resolve(settings.cellBackgroundColor, scheme.surfaceContainerLow),
+            ink = resolve(settings.cellTextColor, scheme.onSurface),
+            line = resolve(settings.gridLineColor, scheme.outlineVariant),
+            lineStyle = settings.gridLineStyle,
+        )
+    }
+}
+
+/**
+ * 自定义课表背景图。
+ *
+ * 路径存在设置里，图片由用户从相册选择后复制到应用私有目录；解码失败时静默回退到纯色背景，
+ * 不让一张坏图把课表整页拖黑。
+ */
+@Composable
+internal fun rememberBackgroundPainter(path: String): State<androidx.compose.ui.graphics.painter.Painter?> {
+    return produceState<androidx.compose.ui.graphics.painter.Painter?>(null, path) {
+        value = if (path.isBlank()) null else withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val file = java.io.File(path)
+                if (!file.isFile) return@runCatching null
+                if (file.length() > MAX_BACKGROUND_BYTES) return@runCatching null
+                val bitmap = android.graphics.BitmapFactory.decodeFile(path) ?: return@runCatching null
+                androidx.compose.ui.graphics.painter.BitmapPainter(bitmap.asImageBitmap())
+            }.getOrNull()
+        }
+    }
+}
+
+private const val MAX_BACKGROUND_BYTES = 24L * 1024 * 1024
+
+/** 格子间距：无样式时不留缝，网格线在视觉上消失；其余样式保留 1dp 缝隙。 */
+private fun gridCellPadding(style: String): androidx.compose.ui.unit.Dp =
+    if (style == GRID_LINE_NONE) 0.dp else 1.dp
+
+/**
+ * 网格线图层，只负责「虚线」。
+ *
+ * 其余两种样式靠格子间距表达：缝隙露出课表背景即「透明线」，缝隙归零即「无样式」。
+ */
+@Composable
+private fun DashedGridLines(
+    columns: Int,
+    rows: Int,
+    cellW: Float,
+    cellH: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (columns <= 0 || rows <= 0) return
+    androidx.compose.foundation.Canvas(modifier) {
+        val width = 1.dp.toPx()
+        val effect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
+        val totalY = cellH * rows
+        for (c in 1 until columns) {
+            val x = c * cellW
+            drawLine(color, Offset(x, 0f), Offset(x, totalY), strokeWidth = width, pathEffect = effect)
+        }
+        val totalX = cellW * columns
+        for (r in 1 until rows) {
+            val y = r * cellH
+            drawLine(color, Offset(0f, y), Offset(totalX, y), strokeWidth = width, pathEffect = effect)
+        }
+    }
+}
+
 private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaultColor: Long, surface: Color): CourseStyle {
     val background = Color(colors[course.id] ?: defaultColor).compositeOver(surface)
     return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
@@ -130,6 +226,9 @@ fun Timetable(
     onMoveDay: (Int, Int) -> Unit = { _, _ -> },
     onMoveRow: (Int, Int) -> Unit = { _, _ -> },
     onEditMode: (Boolean) -> Unit = {},
+    canUndo: Boolean = false,
+    onUndo: () -> Unit = {},
+    onRevert: () -> Unit = {},
 ) {
     val s = data.settings
     val density = LocalDensity.current
@@ -170,10 +269,12 @@ fun Timetable(
         projectWeek(data.courses, week, s.firstDay, s.lastDay, s.weekStart, s.periods)
     }
     val surface = MaterialTheme.colorScheme.surface
+    val palette = rememberGridPalette(s)
     val styles = remember(projection, surface, data.colors, s.defaultColor) {
         projection.placed.values.asSequence().flatten()
             .associate { it.course.id to courseStyle(it.course, data.colors, s.defaultColor, surface) }
     }
+    val background by rememberBackgroundPainter(s.timetableBackground)
 
     val dayCount = projection.days.size.coerceAtLeast(1)
     val periodCount = s.periods.size.coerceAtLeast(1)
@@ -342,6 +443,8 @@ fun Timetable(
             },
             actions = {
                 if (editMode) {
+                    TextButton(onClick = onUndo, enabled = canUndo) { Text("撤销") }
+                    TextButton(onClick = onRevert) { Text("回退") }
                     TextButton(onClick = { onEditMode(false) }) { Text("完成") }
                 } else {
 
@@ -556,6 +659,16 @@ fun Timetable(
                         }
                     },
             ) {
+                background?.let { painter ->
+                    androidx.compose.foundation.Image(
+                        painter = painter,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        alpha = .45f,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
                 Row(
                     Modifier.fillMaxSize().graphicsLayer {
                         translationX = slide.value * size.width
@@ -693,7 +806,7 @@ fun Timetable(
                                             dayNames[day - 1].removePrefix("星期"),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = if (isToday) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurface,
+                                            else palette.ink,
                                             maxLines = 1,
                                         )
                                         Text(
@@ -708,6 +821,19 @@ fun Timetable(
                             }
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
+                            if (palette.lineStyle == GRID_LINE_DASHED) {
+                                DashedGridLines(
+                                    columns = dayCount,
+                                    rows = periodCount,
+                                    cellW = cellW,
+                                    cellH = cellH,
+                                    color = palette.line,
+                                    modifier = Modifier
+                                        .offset { IntOffset((-grid.offsetX).roundToInt(), (-grid.offsetY).roundToInt()) }
+                                        .requiredWidth(with(density) { (cellW * dayCount).toDp() })
+                                        .requiredHeight(with(density) { (cellH * periodCount).toDp() }),
+                                )
+                            }
 
                             projection.days.forEachIndexed { dayIndex, day ->
                                 Box(
@@ -730,10 +856,20 @@ fun Timetable(
                                                     Modifier
                                                         .height(with(density) { cellH.toDp() })
                                                         .fillMaxWidth()
-                                                        .padding(1.dp)
-                                                        .background(MaterialTheme.colorScheme.surfaceContainerLow, gridCellShape),
+                                                        .padding(gridCellPadding(palette.lineStyle))
+                                                        .background(palette.cell, gridCellShape),
                                                 )
                                             }
+                                        }
+                                        if (palette.lineStyle == GRID_LINE_DASHED) {
+                                            DashedGridLines(
+                                                columns = 1,
+                                                rows = periodCount,
+                                                cellW = cellW,
+                                                cellH = cellH,
+                                                color = palette.line,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
                                         }
                                         projection.placed[day].orEmpty().forEach { pc ->
                                             val course = pc.course
@@ -796,9 +932,23 @@ fun Timetable(
                                                 else -> Alignment.Start
                                             }
 
-                                            val alignV = if (s.cellTextAlign == "center") Alignment.CenterVertically
-                                            else Alignment.Top
+                                            val alignV = when (s.cellVerticalAlign) {
+                                                CELL_VERTICAL_CENTER -> Alignment.CenterVertically
+                                                CELL_VERTICAL_BOTTOM -> Alignment.Bottom
+                                                else -> Alignment.Top
+                                            }
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
+                                                val meta = buildString {
+                                                    append(course.startPeriod).append("—").append(course.endPeriod).append("节")
+                                                    if (course.location.isNotBlank()) {
+                                                        append('\n')
+                                                        if (s.showAtSign) append('@')
+                                                        append(course.location)
+                                                    }
+                                                    if (s.showTeacher && course.teacher.isNotBlank()) {
+                                                        append('\n').append(course.teacher)
+                                                    }
+                                                }
                                                 PressCard(
                                                     { onCourse(course) }, card, style.background, gridCellShape,
                                                     minHeight = 0.dp, contentPadding = 4.dp,
@@ -816,12 +966,11 @@ fun Timetable(
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                     )
                                                     Text(
-                                                        course.location + (if (course.location.isBlank()) "" else "\n") +
-                                                            course.startPeriod + "—" + course.endPeriod + "节",
+                                                        meta,
                                                         color = style.ink.copy(alpha = .85f),
                                                         fontSize = cardSize * .82f,
                                                         lineHeight = cardSize * .95f,
-                                                        maxLines = 2,
+                                                        maxLines = 4,
                                                         textAlign = textAlign,
                                                         modifier = Modifier.fillMaxWidth(),
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,

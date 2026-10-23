@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.xunyyds.kelaile.data.*
 import com.xunyyds.kelaile.ui.search.KelaileSearchPill
+import com.xunyyds.kelaile.ui.update.UpdateController
+import com.xunyyds.kelaile.ui.update.UpdateDialog
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 
@@ -36,6 +38,8 @@ private enum class Route(val key: String) {
     Palette("palette"),
     Layout("layout"),
     Motion("motion"),
+    Grid("grid"),
+    Display("display"),
     Semester("semester"),
     Calendar("calendar"),
     Week("week"),
@@ -65,7 +69,27 @@ private fun SectionHint(text: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:String,highlightRequest:String?,searchExpanded:Boolean,onRoute:(String)->Unit,onChange:(AppData)->Unit,onAdd:()->Unit,onPeriods:()->Unit,onBrowser:()->Unit,onImport:()->Unit,onExport:()->Unit,onReminder:(Boolean)->Unit,onSearch:()->Unit,bottomInset:androidx.compose.ui.unit.Dp=0.dp) {
+fun SharedTransitionScope.SettingsPage(
+    data: AppData,
+    scroll: ScrollState,
+    route: String,
+    highlightRequest: String?,
+    searchExpanded: Boolean,
+    onRoute: (String) -> Unit,
+    onChange: (AppData) -> Unit,
+    onAdd: () -> Unit,
+    onPeriods: () -> Unit,
+    onBrowser: () -> Unit,
+    onImportTimetable: () -> Unit,
+    onExportTimetable: () -> Unit,
+    onImportBackup: () -> Unit,
+    onExportBackup: () -> Unit,
+    onReminder: (Boolean) -> Unit,
+    onSearch: () -> Unit,
+    update: UpdateController,
+    onPickBackground: () -> Unit,
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
+) {
     val context = LocalContext.current
     val s = data.settings
     val current = Route.of(route)
@@ -154,21 +178,61 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
             when(current) {
                 Route.Root -> {
                     Section("偏好设置") {
-                        SettingsItem("外观","主题、莫奈取色、底栏与显示布局") { onRoute(Route.Appearance.key) }
+                        SettingsItem("外观","主题、莫奈取色、底栏、课表配色与显示布局") { onRoute(Route.Appearance.key) }
+                        SettingsItem("显示设置","格内 @ 与老师、对齐与密度") { onRoute(Route.Display.key) }
                         SettingsItem("学期与课表","学期信息、日期、周次与节次时间") { onRoute(Route.Semester.key) }
                         SettingsItem("课程","课程管理与默认颜色") { onRoute(Route.Courses.key) }
                         SettingsItem("上课提醒","通知权限与提前时间") { onRoute(Route.Reminders.key) }
-                        SettingsItem("导入与备份","教务浏览器、本地备份") { onRoute(Route.Data.key) }
+                        SettingsItem("数据与备份","整应用备份恢复、课表导入导出、教务浏览器") { onRoute(Route.Data.key) }
                     }
-                    Section("关于") { SettingsItem("关于课来了","版本、系统与开源项目") { onRoute(Route.About.key) } }
-                    Section("") { SettingsItem("分享应用","打包当前已安装版本，通过系统分享 APK") { shareInstalledApk(context) } }
+                    Section("关于") { SettingsItem("关于与更新","版本、更新检测、GitHub 与开源许可") { onRoute(Route.About.key) } }
                 }
                 Route.Appearance -> Section("外观") {
                     ChoiceSetting("明暗模式",s.theme,linkedMapOf("system" to "跟随系统","light" to "浅色","dark" to "深色")) { update { s.copy(theme=it) } }
                     SettingsItem("主题颜色",if(s.dynamicColor)"莫奈 · 系统壁纸取色" else paletteNames[s.themePalette].orEmpty()) { onRoute(Route.Palette.key) }
                     ChoiceSetting("底栏样式",s.navigationStyle,linkedMapOf("default" to "默认","floating" to "悬浮","liquid" to "液态玻璃")) { update { s.copy(navigationStyle=it) } }
+                    SettingsItem("课程表外观","背景图、表格颜色、文字颜色与网格线") { onRoute(Route.Grid.key) }
                     SettingsItem("显示布局","字体大小、课表密度") { onRoute(Route.Layout.key) }
                     SettingsItem("动效设置","动画速度、减少动画与转场风格") { onRoute(Route.Motion.key) }
+                }
+                Route.Grid -> {
+                    Section("课程表背景") {
+                        SettingsItem("背景图片",s.timetableBackground.ifBlank { "未设置，使用主题背景" }) { onPickBackground() }
+                        if (s.timetableBackground.isNotBlank()) {
+                            SettingsItem("清除背景图","恢复为纯色背景") { update { s.copy(timetableBackground = "") } }
+                        }
+                    }
+                    Section("表格颜色") {
+                        ColorSettingRow("表头背景",s.tableHeaderColor,"表头与节次栏") { update { s.copy(tableHeaderColor=it) } }
+                        ColorSettingRow("单元格背景",s.cellBackgroundColor,"课表格子底色") { update { s.copy(cellBackgroundColor=it) } }
+                    }
+                    Section("文字与线") {
+                        ColorSettingRow("表格文字颜色",s.cellTextColor,"表头与格内文字") { update { s.copy(cellTextColor=it) } }
+                        ColorSettingRow("格子边框颜色",s.gridLineColor,"网格线颜色") { update { s.copy(gridLineColor=it) } }
+                        ChoiceSetting("网格线样式",s.gridLineStyle,linkedMapOf(
+                            GRID_LINE_DASHED to "虚线",
+                            GRID_LINE_TRANSPARENT to "透明线（保留间距）",
+                            GRID_LINE_NONE to "无样式（与背景同色）",
+                        )) { update { s.copy(gridLineStyle=it) } }
+                        SectionHint("虚线为默认观感；透明线保留格子间距但不着色；无样式去掉间距，视觉上没有网格线。")
+                    }
+                }
+                Route.Display -> {
+                    Section("格内显示") {
+                        SettingsSwitch("地点前显示 @","格内地点前加一个 @ 前缀",s.showAtSign) { update { s.copy(showAtSign=it) } }
+                        SettingsSwitch("格子内显示老师","在课程格子里额外显示教师姓名",s.showTeacher) { update { s.copy(showTeacher=it) } }
+                    }
+                    Section("格内对齐") {
+                        ChoiceSetting("水平对齐",s.cellTextAlign,linkedMapOf("start" to "靠左","center" to "居中","end" to "靠右")) { update { s.copy(cellTextAlign=it) } }
+                        ChoiceSetting("竖直对齐",s.cellVerticalAlign,linkedMapOf(
+                            CELL_VERTICAL_TOP to "靠上",
+                            CELL_VERTICAL_CENTER to "居中",
+                            CELL_VERTICAL_BOTTOM to "靠下",
+                        )) { update { s.copy(cellVerticalAlign=it) } }
+                    }
+                    Section("布局") {
+                        SettingsItem("显示布局","字体大小、课表密度") { onRoute(Route.Layout.key) }
+                    }
                 }
                 Route.Palette -> {
                     Section("莫奈动态色") {
@@ -296,19 +360,32 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                     Box(Modifier.padding(18.dp).fillMaxWidth().height(48.dp).background(Color(s.defaultColor),MaterialTheme.shapes.medium))
                     Text("已保存 ${data.courses.size} 门课程，点击课表课程卡片编辑",Modifier.padding(18.dp),style=MaterialTheme.typography.bodyMedium)
                 }
-                Route.Reminders -> Section("提醒") {
-                    SettingsTarget("上课提醒") {
-                        Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("上课提醒"); Text("非精确提醒，省电策略可能延迟",style=MaterialTheme.typography.bodySmall) }; Switch(s.reminders,onReminder) }
+                Route.Reminders -> {
+                    Section("提醒") {
+                        SettingsTarget("上课提醒") {
+                            Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("上课提醒"); Text("非精确提醒，省电策略可能延迟",style=MaterialTheme.typography.bodySmall) }; Switch(s.reminders,onReminder) }
+                        }
+                        ReminderMinutesSetting(s.reminderMinutes) { update { s.copy(reminderMinutes=it) } }
                     }
-                    NumberChoice("提前分钟",s.reminderMinutes,0..60) { update { s.copy(reminderMinutes=it) } }
+                    SectionHint("常用档位直接点选；需要特殊值可自定义输入 0–60 分钟。")
                 }
-                Route.Data -> Section("数据 · 仅存本机") {
-                    SettingsItem("教务网址",s.schoolUrl.ifBlank { "填写学校实际教务入口" }) { text("教务网址",s.schoolUrl) { update { s.copy(schoolUrl=it.trim()) } } }
-                    SettingsItem("浏览器导入课表","桌面模式 · 自动识别学校 · 预览确认") { onBrowser() }
-                    SettingsItem("导入课表文件","兼容旧版本 JSON 备份") { onImport() }
-                    SettingsItem("导出课表文件","备份课程、学校与设置") { onExport() }
+                Route.Data -> {
+                    Section("应用数据备份与恢复") {
+                        SettingsItem("备份应用数据","导出设置、课表、备注与颜色等全部数据") { onExportBackup() }
+                        SettingsItem("恢复应用数据","从备份文件整体覆盖当前数据") { onImportBackup() }
+                        SectionHint("整应用备份是 JSON，包含全部设置与备注；恢复会覆盖当前全部数据，建议先导出一份。")
+                    }
+                    Section("课表导入导出") {
+                        SettingsItem("导入课表（Excel）","仅支持 .xlsx 表格；旧版 JSON 备份不支持") { onImportTimetable() }
+                        SettingsItem("导出课表（Excel）","仅导出课表表格，不含应用设置与备注") { onExportTimetable() }
+                        SectionHint("课表导入不兼容旧数据格式：旧版 JSON 备份请改用上面的「恢复应用数据」。")
+                    }
+                    Section("教务导入") {
+                        SettingsItem("教务网址",s.schoolUrl.ifBlank { "填写学校实际教务入口" }) { text("教务网址",s.schoolUrl) { update { s.copy(schoolUrl=it.trim()) } } }
+                        SettingsItem("浏览器导入课表","桌面模式 · 自动识别学校 · 预览确认") { onBrowser() }
+                    }
                 }
-                Route.About -> AboutContent()
+                Route.About -> AboutContent(update)
             }
             Spacer(Modifier.height(16.dp + bottomInset))
         }
@@ -359,21 +436,23 @@ private val Route.title: String
         Route.Palette -> "主题颜色"
         Route.Layout -> "显示布局"
         Route.Motion -> "动效设置"
+        Route.Grid -> "课程表外观"
+        Route.Display -> "显示设置"
         Route.Semester -> "学期与课表"
         Route.Calendar -> "学期日期"
         Route.Week -> "周次与星期"
         Route.Courses -> "课程"
         Route.Reminders -> "上课提醒"
-        Route.Data -> "导入与备份"
-        Route.About -> "关于课来了"
+        Route.Data -> "数据与备份"
+        Route.About -> "关于与更新"
     }
 
 private val Route.parent: Route
     get() = when (this) {
         Route.Root -> Route.Root
-        Route.Palette, Route.Layout, Route.Motion -> Route.Appearance
+        Route.Palette, Route.Layout, Route.Motion, Route.Grid -> Route.Appearance
         Route.Calendar, Route.Week -> Route.Semester
-        Route.Appearance, Route.Semester, Route.Courses, Route.Reminders, Route.Data, Route.About -> Route.Root
+        Route.Appearance, Route.Display, Route.Semester, Route.Courses, Route.Reminders, Route.Data, Route.About -> Route.Root
     }
 
 private val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
@@ -419,4 +498,103 @@ private fun ChoiceSetting(title:String,value:String,options:Map<String,String>,o
         onDismiss={ open=false },
         onSelect={ key -> onChange(key); open=false },
     )
+}
+
+private val reminderPresets = listOf(0, 5, 10, 15, 20, 30)
+
+/**
+ * 提前分钟：常用档位横向排列 + 自定义输入。
+ * 仍然写回 `settings.reminderMinutes`，存储键与读取逻辑不变。
+ */
+@Composable
+private fun ReminderMinutesSetting(value: Int, onChange: (Int) -> Unit) {
+    var customOpen by remember { mutableStateOf(false) }
+    var draft by remember(value) { mutableStateOf(value.toString()) }
+    var invalid by remember { mutableStateOf<String?>(null) }
+    SettingsTarget("提前分钟") {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("提前分钟 · $value 分钟")
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(reminderPresets.size) { index ->
+                    val minutes = reminderPresets[index]
+                    FilterChip(
+                        selected = value == minutes,
+                        onClick = { onChange(minutes) },
+                        label = { Text(if (minutes == 0) "准点" else "$minutes 分钟") },
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = value !in reminderPresets,
+                        onClick = { draft = value.toString(); invalid = null; customOpen = true },
+                        label = { Text(if (value in reminderPresets) "自定义" else "自定义 · $value") },
+                    )
+                }
+            }
+        }
+    }
+    if (customOpen) AlertDialog(
+        onDismissRequest = { customOpen = false },
+        title = { Text("自定义提前分钟") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it.filter(Char::isDigit).take(5) },
+                    label = { Text("分钟（0–60）") },
+                    singleLine = true,
+                    isError = invalid != null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                    ),
+                )
+                invalid?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val minutes = draft.toIntOrNull()
+                if (minutes == null || minutes !in 0..60) invalid = "请输入 0 到 60 之间的整数"
+                else { onChange(minutes); customOpen = false }
+            }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = { customOpen = false }) { Text("取消") } },
+    )
+}
+
+/** 课表颜色项：未设置时显示「跟随主题」，点开调色盘后写入具体颜色。 */
+@Composable
+private fun ColorSettingRow(title: String, value: Long, subtitle: String, onChange: (Long) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = if (value == GRID_COLOR_AUTO) "跟随主题" else "#${value.toString(16).padStart(8, '0').uppercase()}"
+    SettingsTarget(title) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = true }.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) { Text(title); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier.size(28.dp).clip(CircleShape)
+                    .background(if (value == GRID_COLOR_AUTO) MaterialTheme.colorScheme.surfaceContainerHigh else Color(value)),
+            )
+        }
+    }
+    if (open) ColorPickerDialog(if (value == GRID_COLOR_AUTO) 0xffffffffL else value, { open = false }) {
+        onChange(it); open = false
+    }
+}
+
+@Composable
+private fun SettingsSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    SettingsTarget(title) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked, onChange)
+        }
+    }
 }
