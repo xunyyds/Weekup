@@ -34,17 +34,35 @@ class ScheduleService(context:Context) {
         BackupCodec.decode(text)
     }
 
-    suspend fun readImport(uri: Uri): Pair<AppData?, SchoolImport?> = withContext(Dispatchers.IO) {
+    /** 仅从 Excel 表格导入课表；旧版 JSON 备份在此明确拒绝，不做静默转换。 */
+    suspend fun readTimetable(uri: Uri): SchoolImport = withContext(Dispatchers.IO) {
+        require(isSpreadsheet(uri)) { "课表导入仅支持 Excel（.xlsx）表格；旧版 JSON 备份不支持此入口，请改用「应用数据恢复」" }
+        val stream = app.contentResolver.openInputStream(uri) ?: error("无法读取文件")
+        stream.use { XlsxTimetable.parse(XlsxReader.read(it)) }
+    }
+
+    /** 仅从整应用备份恢复；Excel 课表在此明确拒绝，避免两种语义混用。 */
+    suspend fun readAppBackup(uri: Uri): AppData = withContext(Dispatchers.IO) {
+        require(!isSpreadsheet(uri)) { "应用数据恢复需要备份文件（.json）；导入 Excel 课表请使用「课表导入」" }
+        readBackup(uri)
+    }
+
+    private fun isSpreadsheet(uri: Uri): Boolean {
         val name = uri.lastPathSegment.orEmpty().lowercase()
         val mime = app.contentResolver.getType(uri).orEmpty().lowercase()
-        val isXlsx = name.endsWith(".xlsx") || mime.contains("spreadsheetml")
-        if (!isXlsx) return@withContext readBackup(uri) to null
-        val stream = app.contentResolver.openInputStream(uri) ?: error("无法读取文件")
-        val grid = stream.use { XlsxReader.read(it) }
-        null to XlsxTimetable.parse(grid)
+        return name.endsWith(".xlsx") || mime.contains("spreadsheetml")
     }
-    suspend fun export(uri:Uri,data:AppData)=withContext(Dispatchers.IO) {
-        val bytes=BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
-        app.contentResolver.openOutputStream(uri,"wt")?.use { it.write(bytes) } ?: error("无法写入文件")
+
+    /** 导出整应用数据备份（设置、课表、备注与颜色全量）。 */
+    suspend fun exportBackup(uri: Uri, data: AppData) = withContext(Dispatchers.IO) {
+        val bytes = BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
+        app.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: error("无法写入文件")
+    }
+
+    /** 导出 Excel 课表，与整应用备份完全分开。 */
+    suspend fun exportTimetable(uri: Uri, data: AppData) = withContext(Dispatchers.IO) {
+        require(data.courses.isNotEmpty()) { "还没有课程可导出" }
+        val bytes = XlsxWriter.writeTimetable(data)
+        app.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: error("无法写入文件")
     }
 }
