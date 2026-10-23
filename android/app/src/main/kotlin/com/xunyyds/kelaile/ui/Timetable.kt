@@ -1,25 +1,20 @@
 package com.xunyyds.kelaile.ui
 
-import android.Manifest
-import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,25 +26,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xunyyds.kelaile.data.*
-import com.xunyyds.kelaile.ui.glass.GlassHost
-import com.xunyyds.kelaile.ui.glass.glassSource
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -60,10 +55,7 @@ private val gridCellShape = androidx.compose.ui.graphics.RectangleShape
 
 private val gutterWidth = 54.dp
 
-private const val ROW_ASPECT = 1.02f
-
-private const val MIN_ZOOM = 1f
-private const val MAX_ZOOM = 2.6f
+private val dayHeaderHeight = 38.dp
 
 private data class CourseStyle(val background: Color, val ink: Color)
 
@@ -117,27 +109,11 @@ private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaul
     return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
 }
 
-internal fun minZoomFor(dayCount: Int, availWidth: Float, density: Float): Float = MIN_ZOOM
-
-internal fun snapZoom(zoom: Float, dayCount: Int, minZoom: Float = MIN_ZOOM): Float {
-    if (dayCount <= 0) return minZoom
-    val visible = (dayCount / zoom).roundToInt().coerceIn(1, dayCount)
-    return (dayCount.toFloat() / visible).coerceIn(minZoom, MAX_ZOOM)
-}
-
-internal fun snapOffset(offset: Float, cell: Float, viewport: Float, content: Float): Float {
-    val max = (content - viewport).coerceAtLeast(0f)
-    if (max <= 0f) return 0f
-    return (offset / cell).roundToInt().toFloat().times(cell).coerceIn(0f, max)
-}
-
-private val dayHeaderHeight = 38.dp
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun Timetable(
     data: AppData,
-    scroll: ScrollState,
+    @Suppress("UNUSED_PARAMETER") scroll: ScrollState,
     viewWeek: Int,
     onViewWeek: (Int) -> Unit,
     onCourse: (CourseSession) -> Unit,
@@ -158,12 +134,10 @@ fun Timetable(
     val s = data.settings
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     val snapMillis = kelaileMillis(240)
     val today = LocalDate.now()
 
-    var zoom by rememberSaveable { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
     var boxW by remember { mutableIntStateOf(0) }
     var viewportH by remember { mutableIntStateOf(0) }
     var immersive by remember { mutableStateOf(false) }
@@ -177,6 +151,18 @@ fun Timetable(
     var rowTo by remember { mutableIntStateOf(0) }
     var colDrag by remember { mutableFloatStateOf(0f) }
     var rowDrag by remember { mutableFloatStateOf(0f) }
+
+    // 缩放档位跨配置变更保留；偏移量不保留（旋转后重新对齐到可见区域即可）。
+    var zoomMemory by rememberSaveable { mutableFloatStateOf(GRID_MIN_ZOOM) }
+    val grid = remember { TimetableGridState(zoomMemory) }
+    LaunchedEffect(grid) {
+        snapshotFlow { grid.zoom }.distinctUntilChanged().collect { zoomMemory = it }
+    }
+
+    // 长按判定靠「手指按住不动」时的时间流逝，而按住不动不会产生指针事件，
+    // 所以在手势协程里等超时是等不到的（实测：真长按毫无反应，慢速拖动反而误进编辑模式）。
+    // 这里改用组合侧计时器：按下时挂起一个定时任务，手指一动就取消。
+    var longPressArmed by remember { mutableStateOf(false) }
 
     val gutterPx = with(density) { gutterWidth.toPx() }
     val headerPx = with(density) { dayHeaderHeight.toPx() }
@@ -198,34 +184,29 @@ fun Timetable(
     val periodCount = s.periods.size.coerceAtLeast(1)
     val availW = (boxW - gutterPx).coerceAtLeast(1f)
     val availH = (viewportH - headerPx).coerceAtLeast(1f)
-    val minZoom = minZoomFor(dayCount, availW, density.density)
-    val zoomEff = zoom.coerceIn(minZoom, MAX_ZOOM)
-    LaunchedEffect(zoomEff) { if (zoomEff != zoom) zoom = zoomEff }
-    val cellW = availW / dayCount * zoomEff
-    val cellH = cellW * ROW_ASPECT
-    val maxX = (cellW * dayCount - availW).coerceAtLeast(0f)
-    val maxY = (cellH * periodCount - availH).coerceAtLeast(0f)
+    val layout = remember(dayCount, periodCount, availW, availH, gutterPx, headerPx) {
+        GridLayout(dayCount, periodCount, availW, availH, gutterPx, headerPx)
+    }
+    val zoom = grid.zoom
+    val cellW = layout.cellWidth(zoom)
+    val cellH = layout.cellHeight(zoom)
 
-    fun applySnap() {
-        val targetZoom = snapZoom(zoomEff, dayCount, minZoom)
-        val cw = availW / dayCount * targetZoom
-        val ch = cw * ROW_ASPECT
-        val tx = snapOffset(offsetX, cw, availW, cw * dayCount)
-        val ty = snapOffset(offsetY, ch, availH, ch * periodCount)
-        val z0 = zoomEff
-        val x0 = offsetX.coerceIn(0f, (cellW * dayCount - availW).coerceAtLeast(0f))
-        val y0 = offsetY.coerceIn(0f, (cellH * periodCount - availH).coerceAtLeast(0f))
-        scope.launch {
-            androidx.compose.animation.core.animate(
-                0f, 1f,
-                animationSpec = tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing),
-            ) { t, _ ->
-                zoom = z0 + (targetZoom - z0) * t
-                offsetX = x0 + (tx - x0) * t
-                offsetY = y0 + (ty - y0) * t
-            }
-            zoom = targetZoom; offsetX = tx; offsetY = ty
-        }
+    // 手势闭包不能读重组时的旧值：布局、周次、编辑态、设置与回调都通过 rememberUpdatedState 取最新。
+    val layoutNow by rememberUpdatedState(layout)
+    val weekNow by rememberUpdatedState(week)
+    val editNow by rememberUpdatedState(editMode)
+    val projectionNow by rememberUpdatedState(projection)
+    val settingsNow by rememberUpdatedState(s)
+    val onWeekNow by rememberUpdatedState(onViewWeek)
+    val onImmersiveNow by rememberUpdatedState(onImmersive)
+    val onEditModeNow by rememberUpdatedState(onEditMode)
+
+    val gestureJob = remember { JobSlot() }
+    val velocityTracker = remember { VelocityTracker() }
+
+    // 视口或周次结构变化后把偏移收敛回合法范围，避免旋转/改作息后停在空白处。
+    LaunchedEffect(layout) {
+        grid.clampInto(layout)
     }
 
     LaunchedEffect(week) {
@@ -235,21 +216,98 @@ fun Timetable(
         slide.animateTo(0f, tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing))
     }
 
+    // 长按进入排课编辑：按下时挂起计时，手指一动即取消。
+    LaunchedEffect(longPressArmed) {
+        if (!longPressArmed || editMode) return@LaunchedEffect
+        kotlinx.coroutines.delay(android.view.ViewConfiguration.getLongPressTimeout().toLong())
+        if (longPressArmed && !editMode) {
+            longPressArmed = false
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onEditMode(true)
+        }
+    }
+
     BackHandler(enabled = editMode) { onEditMode(false) }
     LaunchedEffect(editMode) { if (!editMode) { dragging = null; dragSpot = null; columnFrom = 0; rowFrom = 0 } }
 
-    fun spotAt(x: Float, y: Float): Pair<Int, Int> {
-        val col = ((x - gutterPx + offsetX) / cellW).toInt().coerceIn(0, dayCount - 1)
-        val row = ((y - headerPx + offsetY) / cellH).toInt().coerceIn(0, periodCount - 1)
-        return projection.days[col] to row
+    /** 把缩放动画到目标档位，并让 (anchorX, anchorY) 处的内容保持不动。 */
+    suspend fun animateZoomTo(target: Float, anchorX: Float, anchorY: Float) {
+        val bounds = layoutNow
+        val z0 = grid.zoom
+        if (z0 <= 0f || abs(target - z0) < 1e-3f) {
+            grid.zoom = target
+            grid.clampInto(bounds)
+            return
+        }
+        val x0 = grid.offsetX
+        val y0 = grid.offsetY
+        animate(0f, 1f, animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)) { t, _ ->
+            val z = z0 + (target - z0) * t
+            val ratio = z / z0
+            grid.zoom = z
+            grid.offsetX = anchoredOffset(x0, anchorX, ratio, bounds.availW, bounds.contentWidth(z))
+            grid.offsetY = anchoredOffset(y0, anchorY, ratio, bounds.availH, bounds.contentHeight(z))
+        }
+        grid.zoom = target
+        grid.clampInto(bounds)
     }
 
-    val dragThreshold = with(density) { 52.dp.toPx() }
+    /** 单轴收尾：越界先弹回边界，否则按速度做惯性滑动并停在边界。 */
+    suspend fun settleAxis(
+        start: Float,
+        velocity: Float,
+        max: Float,
+        set: (Float) -> Unit,
+    ) {
+        if (start < 0f || start > max) {
+            animate(
+                start, start.coerceIn(0f, max),
+                animationSpec = spring(dampingRatio = .82f, stiffness = 900f),
+            ) { v, _ -> set(v) }
+            set(start.coerceIn(0f, max))
+            return
+        }
+        decayInto(start, velocity, 0f, max, onChange = set)
+    }
+
+    fun settle(velocity: Offset, pinched: Boolean, lastCentroid: Offset) {
+        val bounds = layoutNow
+        gestureJob.launch(scope) {
+            if (pinched) {
+                val anchorX = (lastCentroid.x - bounds.gutterPx).let {
+                    if (it.isFinite()) it.coerceIn(0f, bounds.availW) else bounds.availW / 2f
+                }
+                val anchorY = (lastCentroid.y - bounds.headerPx).let {
+                    if (it.isFinite()) it.coerceIn(0f, bounds.availH) else bounds.availH / 2f
+                }
+                animateZoomTo(nearestZoomRung(grid.zoom), anchorX, anchorY)
+                return@launch
+            }
+            val maxX = bounds.maxOffsetX(grid.zoom)
+            val maxY = bounds.maxOffsetY(grid.zoom)
+            coroutineScope {
+                launch { settleAxis(grid.offsetX, -velocity.x, maxX) { grid.offsetX = it } }
+                launch { settleAxis(grid.offsetY, -velocity.y, maxY) { grid.offsetY = it } }
+            }
+            grid.offsetX = clampOffset(grid.offsetX, bounds.availW, bounds.contentWidth(grid.zoom))
+            grid.offsetY = clampOffset(grid.offsetY, bounds.availH, bounds.contentHeight(grid.zoom))
+        }
+    }
+
+    /** 编辑模式下这些位置由子手势接管整列/整行/单卡拖动，父级不要再抢来平移。 */
+    fun editableZoneAt(x: Float, y: Float): Boolean {
+        val bounds = layoutNow
+        if (x < bounds.gutterPx + 2f || y < bounds.headerPx + 2f) return true
+        val col = bounds.columnAt(x, grid.offsetX, grid.zoom)
+        val row = bounds.rowAt(y, grid.offsetY, grid.zoom)
+        val day = projectionNow.days.getOrNull(col) ?: return false
+        return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
+    }
 
     Column(Modifier.fillMaxSize()) {
         KelaileTopBar(
             title = "",
-            collapseFraction = if (immersive) 1f else (offsetY / (availH * .6f)).coerceIn(0f, 1f),
+            collapseFraction = if (immersive) 1f else (grid.offsetY / (availH * .6f)).coerceIn(0f, 1f),
             modifier = Modifier.graphicsLayer { translationY = if (immersive) -size.height else 0f },
             titleContent = {
                 if (editMode) {
@@ -329,61 +387,179 @@ fun Timetable(
                     .fillMaxSize()
                     .clipToBounds()
                     .onSizeChanged { boxW = it.width; viewportH = it.height }
-
-                    .pointerInput(editMode) {
-                        detectTapGestures(onLongPress = { if (!editMode) onEditMode(true) })
-                    }
-                    .pointerInput(dayCount, periodCount, availW, availH, week) {
+                    .pointerInput(Unit) {
+                        val touchSlop = viewConfiguration.touchSlop
+                        val doubleTapMillis = viewConfiguration.doubleTapTimeoutMillis
+                        // 取消长按的抖动阈值必须远小于滚动斜率：
+                        // 否则「慢慢拖」在手指还没越过 touchSlop（约 24px）时就已经超时，
+                        // 于是慢速滚动会误进「排课编辑」。实测已复现，这里改用 4dp 作为长期手势的安全边界。
+                        val longPressCancelSlop = with(density) { 4.dp.toPx() }
+                        var lastTapUptime = 0L
+                        var lastTapAt = Offset.Zero
                         awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            var pinching = false
-                            var edgePull = 0f
-                            var weekPull = 0f
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            gestureJob.cancel()
+                            velocityTracker.resetTracking()
+                            velocityTracker.addPosition(down.uptimeMillis, down.position)
+                            // 交给组合侧计时器判长按；手指一动就取消。
+                            longPressArmed = !editMode
+
+                            var pinched = false
+                            var started = false
+                            var consumedByChild = false
+                            var travelled = 0f
                             var pulledDown = 0f
+                            var weekPull = 0f
+                            var verticalOnly = true
+                            var lastCentroid = Offset.Unspecified
+                            var lastRung = nearestZoomRung(grid.zoom)
+                            val primaryId = down.id
+                            var lastUptime = down.uptimeMillis
+
                             while (true) {
                                 val event = awaitPointerEvent()
-                                if (event.changes.none { it.pressed }) break
+                                val pressedCount = event.changes.count { it.pressed }
+                                if (pressedCount == 0) break
+                                val bounds = layoutNow
+                                val pan = event.calculatePan()
                                 val zoomChange = event.calculateZoom()
-                                val panChange = event.calculatePan()
-                                if (event.changes.count { it.pressed } > 1) pinching = true
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                lastUptime = event.changes.maxOf { it.uptimeMillis }
 
-                                if (pinching && zoomChange != 1f) {
-                                    val anchorX = (event.calculateCentroid().x - gutterPx).coerceAtLeast(0f)
-                                    val atContent = (anchorX + offsetX) / cellW
-                                    val next = (zoomEff * zoomChange).coerceIn(minZoom, MAX_ZOOM)
-                                    val cw = availW / dayCount * next
-                                    zoom = next
-                                    offsetX = (atContent * cw - anchorX)
-                                        .coerceIn(0f, (cw * dayCount - availW).coerceAtLeast(0f))
-                                } else if (panChange != Offset.Zero && dragging == null) {
-                                    val nx = offsetX - panChange.x
-                                    val ny = offsetY - panChange.y
-                                    val horizontal = kotlin.math.abs(panChange.x) >= kotlin.math.abs(panChange.y)
-                                    if (horizontal) weekPull += panChange.x
-                                    if (maxX <= 0f) edgePull += -panChange.x else {
-                                        offsetX = nx.coerceIn(0f, maxX)
-                                        edgePull = if (nx < 0f) nx else if (nx > maxX) nx - maxX else 0f
+                                if (pressedCount > 1) {
+                                    pinched = true
+                                    if (zoomChange != 1f && zoomChange.isFinite()) {
+                                        val z0 = grid.zoom
+                                        val next = (z0 * zoomChange).coerceIn(GRID_MIN_ZOOM, GRID_MAX_ZOOM)
+                                        if (next != z0) {
+                                            val ratio = next / z0
+                                            val ax = ((centroid.x - bounds.gutterPx)).coerceIn(0f, bounds.availW)
+                                            val ay = ((centroid.y - bounds.headerPx)).coerceIn(0f, bounds.availH)
+                                            grid.offsetX = anchoredOffset(
+                                                grid.offsetX, ax, ratio, bounds.availW, bounds.contentWidth(next),
+                                            )
+                                            grid.offsetY = anchoredOffset(
+                                                grid.offsetY, ay, ratio, bounds.availH, bounds.contentHeight(next),
+                                            )
+                                            grid.zoom = next
+                                            // 只在跨过档位那一刻震一次，不是每帧都震。
+                                            val rung = nearestZoomRung(next)
+                                            if (rung != lastRung) {
+                                                lastRung = rung
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
+                                        }
                                     }
-                                    offsetY = ny.coerceIn(0f, maxY)
-                                    pulledDown += -panChange.y
+                                    if (pan != Offset.Zero) {
+                                        grid.offsetX = rubberOffset(
+                                            grid.offsetX - pan.x, bounds.availW, bounds.contentWidth(grid.zoom),
+                                        )
+                                        grid.offsetY = rubberOffset(
+                                            grid.offsetY - pan.y, bounds.availH, bounds.contentHeight(grid.zoom),
+                                        )
+                                    }
+                                    lastCentroid = centroid
+                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                    continue
+                                }
+
+                                // 双指松成单指：这一轮手势到此为止。
+                                // 否则剩下那根手指会拿「第一根手指按下的位置」当过零点，内容会猛跳一下。
+                                if (pinched) break
+
+                                // 单指：先过触摸斜率，再锁定轴向，避免斜拖时翻周与滚动互相打架。
+                                val tracked = event.changes.firstOrNull { it.id == primaryId } ?: event.changes.first()
+                                val delta = tracked.position - down.position
+                                if (!started) {
+                                    travelled = delta.getDistance()
+                                    // 手指一动就取消长按计时（4dp 的小抖动阈值仍算「按住」）。
+                                    if (travelled > longPressCancelSlop) longPressArmed = false
+                                    if (travelled < touchSlop) {
+                                        velocityTracker.addPosition(tracked.uptimeMillis, tracked.position)
+                                        continue
+                                    }
+                                    started = true
+                                    verticalOnly = abs(delta.y) >= abs(delta.x)
+                                }
+                                if (editNow && editableZoneAt(down.position.x, down.position.y)) {
+                                    consumedByChild = true
+                                    break
+                                }
+                                velocityTracker.addPosition(tracked.uptimeMillis, tracked.position)
+                                pulledDown += -pan.y
+                                if (pan != Offset.Zero) {
+                                    val maxXnow = bounds.maxOffsetX(grid.zoom)
+                                    // 放大到需要横向滚动时，横拖是平移内容；否则留给翻周。
+                                    if (maxXnow > 0f) {
+                                        grid.offsetX = rubberOffset(
+                                            grid.offsetX - pan.x, bounds.availW, bounds.contentWidth(grid.zoom),
+                                        )
+                                    } else if (!verticalOnly) {
+                                        weekPull += pan.x
+                                    }
+                                    grid.offsetY = rubberOffset(
+                                        grid.offsetY - pan.y, bounds.availH, bounds.contentHeight(grid.zoom),
+                                    )
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
 
-                            val pulledOver = if (pinching) 0f else weekPull
+                            // 手势结束时如果长按计时还挂着，说明只是一次轻点/拖拽，撤掉它。
+                            longPressArmed = false
+                            if (consumedByChild) return@awaitEachGesture
+
+                            // 双击判定必须在手势收尾时做：轻点根本不过 touchSlop，
+                            // 提前在「started 之后」算的话永远拿不到 isDoubleTap（实测双击失效）。
+                            // 本次手势必须是「原地轻点」才算，带位移的拖拽一律不算，
+                            // 否则拖一下再点一下会误触发缩放（实测曾误开周次面板）。
+                            if (!pinched && !editNow && !started &&
+                                lastTapUptime != 0L &&
+                                down.uptimeMillis - lastTapUptime <= doubleTapMillis &&
+                                (down.position - lastTapAt).getDistance() <= touchSlop * 2f
+                            ) {
+                                val bounds = layoutNow
+                                val next = if (grid.zoom >= GRID_MAX_ZOOM - 1e-3f) GRID_MIN_ZOOM
+                                else nextZoomRung(grid.zoom)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                gestureJob.launch(scope) {
+                                    animateZoomTo(
+                                        next,
+                                        (down.position.x - bounds.gutterPx).coerceIn(0f, bounds.availW),
+                                        (down.position.y - bounds.headerPx).coerceIn(0f, bounds.availH),
+                                    )
+                                }
+                                lastTapUptime = 0L
+                                return@awaitEachGesture
+                            }
+
+                            val velocity = velocityTracker.calculateVelocity()
+                            val bounds = layoutNow
+                            val maxXnow = bounds.maxOffsetX(grid.zoom)
+                            val atLeftEdge = grid.offsetX <= 0.5f
+                            val atRightEdge = grid.offsetX >= maxXnow - 0.5f
                             val turnBy = when {
-                                abs(edgePull) > dragThreshold -> if (edgePull > 0) 1 else -1
-                                abs(pulledOver) > dragThreshold * 1.4f -> if (pulledOver > 0) -1 else 1
+                                pinched || editNow -> 0
+                                maxXnow > 0f && !(atLeftEdge || atRightEdge) -> 0
+                                abs(weekPull) > bounds.availW * .22f -> if (weekPull > 0) -1 else 1
                                 else -> 0
                             }
-                            if (!editMode && turnBy != 0) {
-                                offsetX = 0f
-                                onViewWeek((week + turnBy).coerceIn(1, s.weekCount))
-                            } else if (s.autoHideBars) {
-                                val next = pulledDown > dragThreshold
-                                if (next != immersive) { immersive = next; onImmersive(next) }
+                            if (turnBy != 0) {
+                                grid.offsetX = 0f
+                                lastTapUptime = 0L
+                                onWeekNow((weekNow + turnBy).coerceIn(1, settingsNow.weekCount))
+                                return@awaitEachGesture
                             }
-                            applySnap()
+                            if (!pinched && settingsNow.autoHideBars && abs(pulledDown) > bounds.availH * .12f) {
+                                val next = pulledDown > 0
+                                if (next != immersive) { immersive = next; onImmersiveNow(next) }
+                            }
+                            if (started || pinched) {
+                                settle(Offset(velocity.x, velocity.y), pinched, lastCentroid)
+                                lastTapUptime = 0L
+                            } else {                                // 就地轻点（没过斜率、没长按）：记下来，下一次点击可能凑成双击。
+                                lastTapUptime = lastUptime
+                                lastTapAt = down.position
+                            }
                         }
                     },
             ) {
@@ -404,7 +580,7 @@ fun Timetable(
                                 .height(with(density) { availH.toDp() })
                                 .wrapContentHeight(Alignment.Top, unbounded = true)
                                 .clipToBounds()
-                                .graphicsLayer { translationY = -offsetY },
+                                .graphicsLayer { translationY = -grid.offsetY },
                         ) {
                             val groups = remember(s.periods) { PeriodGroups.indexMap(s.periods) }
                             s.periods.forEachIndexed { rowIndex, pr ->
@@ -481,13 +657,26 @@ fun Timetable(
                     }
                     Column(Modifier.weight(1f)) {
 
-                        Row(Modifier.graphicsLayer { translationX = -offsetX }) {
+                        // 表头与网格都必须「按内容宽度排布」再整体平移。
+                        // 三个坑（都实测过）：
+                        // 1) 给 Row 加 fillMaxSize()：父级只给视口宽度，放大后 7 列被压到 0；
+                        // 2) 只给 Row 设 requiredWidth：dp→px 取整后 Row 比 7×cell 窄几像素；
+                        // 3) 每格用 width(cellW.toDp())：cellW 是 Float，每格取整误差累积，
+                        //    实测直接少掉一整列（cell bg 只到 x=851，右边全是空白）。
+                        // 所以先把 cellW 取整成整数像素，再转 dp —— 这样 dp→px 回来精确等于该整数。
+                        val cellWpx = cellW.roundToInt().coerceAtLeast(1)
+                        val cellDp = with(density) { cellWpx.toDp() }
+                        val contentW = with(density) { (cellWpx * dayCount).toDp() }
+                        android.util.Log.d("KW", "zoom=${"%.3f".format(grid.zoom)} off=${grid.offsetX} availW=$availW cellWpx=$cellWpx dayCount=$dayCount contentPx=${cellWpx*dayCount} contentWdp=$contentW cellDp=$cellDp density=${density.density}")
+                        Box(Modifier.fillMaxWidth().height(dayHeaderHeight).clipToBounds()) {
                             projection.days.forEachIndexed { dayIndex, day ->
                                 val date = WeekDates.on(s.start, week, day)
                                 val isToday = date == today
                                 val marked = editMode && (columnTo == dayIndex || (columnFrom != 0 && columnFrom == dayIndex))
                                 Box(
-                                    Modifier.width(with(density) { cellW.toDp() }).height(dayHeaderHeight)
+                                    Modifier
+                                        .offset { IntOffset((dayIndex * cellWpx - grid.offsetX).roundToInt(), 0) }
+                                        .requiredWidth(cellDp).height(dayHeaderHeight)
                                         .then(
                                             if (marked) Modifier.background(
                                                 MaterialTheme.colorScheme.primary.copy(alpha = .18f),
@@ -535,16 +724,24 @@ fun Timetable(
                             }
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
-                            Row(Modifier.fillMaxSize().graphicsLayer { translationX = -offsetX }) {
-                                projection.days.forEachIndexed { dayIndex, day ->
-                                    Box(
-                                        Modifier
-                                            .width(with(density) { cellW.toDp() })
-                                            .height(with(density) { availH.toDp() })
-                                            .wrapContentHeight(Alignment.Top, unbounded = true)
-                                            .clipToBounds()
-                                            .graphicsLayer { translationY = -offsetY },
-                                    ) {
+                            // 不用 Row 排版：放大后 Row 的测量/裁剪组合会在内容中段截断
+                            // （实测 rowW 与内容宽都是 1365、translationX 也正确，但只有 ~690px 可见）。
+                            // 改成每天一个绝对定位的 Box，位置完全由像素算出来，不依赖测量结果。
+                            projection.days.forEachIndexed { dayIndex, day ->
+                                Box(
+                                    Modifier
+                                        .offset {
+                                            IntOffset(
+                                                (dayIndex * cellWpx - grid.offsetX).roundToInt(),
+                                                0,
+                                            )
+                                        }
+                                        .requiredWidth(cellDp)
+                                        .height(with(density) { availH.toDp() })
+                                        .wrapContentHeight(Alignment.Top, unbounded = true)
+                                        .clipToBounds()
+                                        .graphicsLayer { translationY = -grid.offsetY },
+                                ) {
                                         Column {
                                             repeat(periodCount) {
                                                 Box(
@@ -577,15 +774,19 @@ fun Timetable(
                                                             onDragStart = { local ->
                                                                 dragging = pc
                                                                 dragAt = Offset(
-                                                                    gutterPx + dayIndex * cellW - offsetX + local.x,
-                                                                    headerPx + pc.startIndex * cellH - offsetY + local.y,
+                                                                    gutterPx + dayIndex * cellW - grid.offsetX + local.x,
+                                                                    headerPx + pc.startIndex * cellH - grid.offsetY + local.y,
                                                                 )
                                                                 dragSpot = day to pc.startIndex
                                                             },
                                                             onDrag = { change, delta ->
                                                                 change.consume()
                                                                 dragAt += delta
-                                                                dragSpot = spotAt(dragAt.x, dragAt.y)
+                                                                val bounds = layoutNow
+                                                                val col = bounds.columnAt(dragAt.x, grid.offsetX, grid.zoom)
+                                                                val row = bounds.rowAt(dragAt.y, grid.offsetY, grid.zoom)
+                                                                val targetDay = projectionNow.days.getOrNull(col) ?: day
+                                                                dragSpot = targetDay to row
                                                             },
                                                             onDragEnd = {
                                                                 val spot = dragSpot
@@ -670,8 +871,8 @@ fun Timetable(
                     if (spotIndex >= 0) Box(
                         Modifier
                             .offset { IntOffset(
-                                (gutterPx + spotIndex * cellW - offsetX).roundToInt(),
-                                (headerPx + spot.second * cellH - offsetY).roundToInt(),
+                                (gutterPx + spotIndex * cellW - grid.offsetX).roundToInt(),
+                                (headerPx + spot.second * cellH - grid.offsetY).roundToInt(),
                             ) }
                             .width(with(density) { cellW.toDp() })
                             .height(with(density) { cellH.toDp() })
@@ -679,6 +880,36 @@ fun Timetable(
                     )
                 }
             }
+        }
+    // 搜索定位到某节课：先放大一档，再把它滚到视口中间。
+    // 两步必须在同一个协程里顺序执行：JobSlot 只保留最后一个任务，
+    // 分开 launch 会让定位动画把缩放动画取消掉，结果只居中了、没放大。
+    LaunchedEffect(locatedCourseId, week, layout) {
+        val id = locatedCourseId ?: return@LaunchedEffect
+        if (boxW == 0 || viewportH == 0) return@LaunchedEffect
+        val bounds = layoutNow
+        val dayIndex = projectionNow.days.indexOfFirst { day ->
+            projectionNow.placed[day].orEmpty().any { it.course.id == id }
+        }
+        if (dayIndex < 0) return@LaunchedEffect
+        val placed = projectionNow.placed[projectionNow.days[dayIndex]].orEmpty().first { it.course.id == id }
+        gestureJob.launch(scope) {
+            if (grid.zoom < 1.6f) {
+                animateZoomTo(nearestZoomRung(1.8f), bounds.availW / 2f, bounds.availH / 2f)
+            }
+            val cellWnow = bounds.cellWidth(grid.zoom)
+            val cellHnow = bounds.cellHeight(grid.zoom)
+            val targetX = (dayIndex + .5f) * cellWnow - bounds.availW / 2f
+            val targetY = (placed.startIndex + (placed.endIndex - placed.startIndex + 1) / 2f) * cellHnow -
+                bounds.availH / 2f
+            animate(
+                grid.offsetX, clampOffset(targetX, bounds.availW, bounds.contentWidth(grid.zoom)),
+                animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
+            ) { v, _ -> grid.offsetX = v }
+            animate(
+                grid.offsetY, clampOffset(targetY, bounds.availH, bounds.contentHeight(grid.zoom)),
+                animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
+            ) { v, _ -> grid.offsetY = v }
         }
     }
     if (pickerOpen) {
