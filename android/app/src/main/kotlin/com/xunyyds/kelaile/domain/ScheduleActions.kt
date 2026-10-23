@@ -2,7 +2,6 @@ package com.xunyyds.kelaile.domain
 
 import com.xunyyds.kelaile.data.*
 
-                                                                                          
 object ScheduleActions {
     fun saveCourse(data:AppData, course:CourseSession, color:Long):AppData = data.copy(
         courses=data.courses.filterNot { it.id==course.id }+course,
@@ -12,7 +11,6 @@ object ScheduleActions {
     fun importSchool(data:AppData,imported:SchoolImport):AppData {
         require(imported.courses.isNotEmpty()) { "没有可导入的课程" }
         val count=maxOf(imported.weekCount ?: data.settings.weekCount,imported.courses.maxOf { it.weeks.max() })
-
 
         val periods=if(imported.periods.isEmpty())data.settings.periods else run {
             val merged=imported.periods.associateBy { it.period }.toMutableMap()
@@ -27,14 +25,10 @@ object ScheduleActions {
         ),courses=imported.courses,colors=emptyMap())
     }
 
-
-
     enum class MoveMode { SWAP, OVERWRITE }
 
     private fun occupying(data: AppData, day: Int, start: Int, end: Int) =
         data.courses.filter { it.weekday == day && it.startPeriod <= end && it.endPeriod >= start }
-
-
 
     fun moveCourse(data: AppData, id: String, day: Int, startPeriod: Int, mode: MoveMode): AppData {
         val course = data.courses.firstOrNull { it.id == id } ?: return data
@@ -49,7 +43,6 @@ object ScheduleActions {
                 val gone = targets.map { it.id }.toSet()
                 courses = courses.filterNot { it.id in gone }
             }
-
 
             MoveMode.SWAP -> targets.minByOrNull { it.startPeriod }?.let { target ->
                 courses = courses.map {
@@ -66,8 +59,6 @@ object ScheduleActions {
         })
     }
 
-
-
     fun moveDay(data: AppData, from: Int, to: Int, mode: MoveMode): AppData {
         require(from in 1..7 && to in 1..7) { "星期参数无效" }
         if (from == to) return data
@@ -81,8 +72,6 @@ object ScheduleActions {
         }
         return data.copy(courses = moved)
     }
-
-
 
     fun moveRow(data: AppData, fromPeriod: Int, toPeriod: Int, mode: MoveMode): AppData {
         require(fromPeriod in 1..100 && toPeriod in 1..100) { "节次参数无效" }
@@ -106,8 +95,6 @@ object ScheduleActions {
         }
         return data.copy(courses = moved)
     }
-
-
 
     fun hasConflict(data: AppData, day: Int, startPeriod: Int, endPeriod: Int): Boolean =
         occupying(data, day, startPeriod, endPeriod).isNotEmpty()

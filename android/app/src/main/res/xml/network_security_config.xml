@@ -1,12 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Cleartext policy.
 
-  Campus教务 systems are frequently served over plain http on a non-standard port, and the
-  user supplies that address at runtime, so this file cannot enumerate hosts without baking
-  one deployment into the source. The app therefore permits cleartext and enforces the real
-  constraint in code: only http/https URLs without embedded credentials are opened at all.
--->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>

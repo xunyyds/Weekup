@@ -93,7 +93,7 @@ fun CourseEditor(course: CourseSession?, settings: AppSettings, initialColor: Lo
                     }
                     Text("调色", color = MaterialTheme.colorScheme.primary)
                 }
-                
+
                 Surface(color = Color(selectedColor.toInt()), modifier = Modifier.fillMaxWidth().padding(12.dp), shape = RoundedCornerShape(12.dp)) {
                     val opacity = ((selectedColor ushr 24) and 255) / 255f
                     val surface = MaterialTheme.colorScheme.surface
@@ -260,7 +260,7 @@ private fun PeriodNumberStepper(value: Int, onChange: (Int) -> Unit) {
 @Composable
 private fun EditorTimeButton(label: String, value: String, allowMidnight: Boolean, onChange: (String) -> Unit) {
     val context = LocalContext.current
-    
+
     var choosing by rememberSaveable { mutableStateOf(false) }
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium)

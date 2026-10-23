@@ -32,7 +32,6 @@ private fun argbLabel(color: Long): String = String.format(Locale.ROOT, "#%08X",
 private fun parseArgb(text: String): Long? =
     if (Regex("^#[0-9a-fA-F]{8}$").matches(text)) text.substring(1).toLongOrNull(16) else null
 
-                                                                                                          
 @Composable
 fun ColorPickerDialog(initialColor: Long, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
     val initialHsv = remember(initialColor) {
@@ -140,7 +139,6 @@ private fun ColorChannelSlider(label: String, value: Float, range: ClosedFloatin
     }
 }
 
-                                                                                                        
 @Composable
 internal fun ColorSwatch(color: Long, modifier: Modifier = Modifier) {
     Canvas(modifier) {

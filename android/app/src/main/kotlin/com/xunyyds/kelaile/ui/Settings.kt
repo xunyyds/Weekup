@@ -51,10 +51,8 @@ private enum class Route(val key: String) {
 
 private data class EditSetting(val title: String, val initial: String, val save: (String) -> Unit)
 
-/** 待确认的学期联动变更；用户点「应用」后才落到设置上。 */
 private data class LinkPrompt(val label: String, val plan: SemesterLink.Plan)
 
-/** 设置项下方的一行说明，用来交代某个字段会联动什么。 */
 @Composable
 private fun SectionHint(text: String) {
     Text(
@@ -98,11 +96,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
         highlighted = null
         onRoute(current.parent.key)
     }
-    /**
-     * 学期设置联动：先算出要改哪些字段，交给用户二次确认，再落地。
-     *
-     * 没有任何变更时直接生效（避免为了「改第 5 周到第 5 周」弹一个空弹窗）。
-     */
+
     fun confirmLink(plan: SemesterLink.Plan, label: String) {
         if (plan.isEmpty) { update { SemesterLink.apply(s, plan) }; return }
         linkPrompt = LinkPrompt(label, plan)
@@ -322,7 +316,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
     }
     if(colorOpen) ColorPickerDialog(s.defaultColor,{colorOpen=false}) { color -> update { s.copy(defaultColor=color) }; colorOpen=false }
     linkPrompt?.let { prompt ->
-        // 二次确认：把所有会被改动的字段逐条列出，用户点「应用」才写入。
+
         AlertDialog(
             onDismissRequest = { linkPrompt = null },
             title = { Text("联动修改学期设置") },

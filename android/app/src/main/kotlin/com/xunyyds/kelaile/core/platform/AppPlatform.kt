@@ -11,7 +11,6 @@ import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-                                                                                      
 data class AppMetadata(
     val packageName: String,
     val versionName: String,
@@ -19,7 +18,6 @@ data class AppMetadata(
     val deviceDescription: String,
 )
 
-                                                                                                 
 object AppPlatform {
     suspend fun readMetadata(context: Context): AppMetadata = withContext(Dispatchers.IO) {
         val app = context.applicationContext
@@ -51,7 +49,6 @@ object AppPlatform {
         }.getOrDefault("无法读取许可，请访问上游项目。")
     }
 
-                                                                
     fun openLink(context: Context, url: String) {
         runCatching {
             val uri = Uri.parse(url)

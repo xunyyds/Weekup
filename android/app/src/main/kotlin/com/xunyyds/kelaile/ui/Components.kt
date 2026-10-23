@@ -95,14 +95,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 
-                                                                                              
-
-
 private class StaggerCursor { var next = 0 }
 
 private val LocalStaggerCursor = staticCompositionLocalOf<StaggerCursor?> { null }
-
-
 
 private const val StaggerRiseDp = 10f
 
@@ -155,7 +150,6 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-                                                                                      
 @Composable
 fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
@@ -201,7 +195,6 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     }
 }
 
-                                                                                                   
 @Composable
 fun PressCard(
     onClick: () -> Unit,
@@ -256,11 +249,6 @@ fun PressCard(
     }
 }
 
-   
-                                                                       
-                                                                                   
-                                                              
-   
 @Composable
 fun KelaileDock(
     style: String,
@@ -287,7 +275,7 @@ fun KelaileDock(
     val currentSelected by rememberUpdatedState(selected)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    
+
     val settledPosition by animateFloatAsState(
         if (dragging) dragPosition else selected.toFloat(),
         animationSpec = if (motion && !dragging) spring(dampingRatio = 0.85f, stiffness = 420f) else snap(),
@@ -340,7 +328,7 @@ fun KelaileDock(
                             val destination = dragPosition.roundToInt().coerceIn(0, 1)
                             dragging = false
                             dragStretch = 0f
-                            
+
                             if (destination != currentSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentOnSelect(destination)
@@ -355,7 +343,7 @@ fun KelaileDock(
                 .selectableGroup(),
         ) {
             val slot = maxWidth / labels.size
-            
+
             if (floating) Box(Modifier.matchParentSize()) {
                 val indicatorMaterial = if (liquid) Modifier.liquidGlass(
                     KelaileShapes.nested(outerRadius, dockInset).value,
@@ -380,7 +368,6 @@ fun KelaileDock(
                         ),
                 )
             }
-
 
             if (solid) Box(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp)
@@ -437,7 +424,6 @@ fun KelaileDock(
     }
 }
 
-
 @Composable
 private fun DockGlyph(index: Int, color: Color) {
     Canvas(Modifier.size(22.dp)) {
@@ -472,16 +458,6 @@ private fun DockGlyph(index: Int, color: Color) {
     }
 }
 
-
-
-
-                     
-                                             
-                                                                           
-                                                                             
-                                                                          
-                                                                             
-                                                      
 fun highlightMatches(
     text: String,
     terms: List<String>,
@@ -514,19 +490,9 @@ fun highlightMatches(
     }
 }
 
-                     
-                                                      
-                                                                         
-                                                                                 
 fun searchTerms(raw: String): List<String> =
     raw.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
 
-                     
-                                                                          
-                                                                                     
-                                                                                     
-                                                                                     
-                     
 fun searchScore(entry: SearchText, terms: List<String>): Int {
     if (terms.isEmpty()) return 0
     var score = 0
@@ -545,21 +511,12 @@ fun searchScore(entry: SearchText, terms: List<String>): Int {
     return score
 }
 
-                      
 data class SearchText(
     val title: String,
     val path: String = "",
     val keywords: String = "",
 )
 
-                     
- 
-                                    
-                                                                           
-                                                                         
-                                                                             
-                                                         
-                                                          
 @Composable
 fun KelaileSearchField(
     query: String,
@@ -620,13 +577,6 @@ fun KelaileSearchField(
     }
 }
 
-                      
-                                                                       
-                                                                                      
-                                                                 
-                                                                                    
-                                                                                
-                                                          
 @Composable
 fun <T> KelaileSearchResults(
     query: String,
@@ -670,11 +620,6 @@ fun <T> KelaileSearchResults(
     }
 }
 
-                      
-                                                                         
-                                                                              
-                                                                    
-                                                                               
 @Composable
 fun SearchResultRow(
     title: AnnotatedString,
@@ -711,12 +656,6 @@ fun SearchResultRow(
     }
 }
 
-                      
-                                                                          
-                                                                                  
-                                                                          
-                                                                        
-                                                                         
 @Composable
 fun KelaileRecentList(
     items: List<String>,
@@ -757,14 +696,8 @@ fun KelaileRecentList(
     }
 }
 
-                      
 enum class KelaileGlyphKind { Search, Close, Back }
 
-                      
-                                                                                    
-                                                                                    
-                                                                                              
-                                                                                  
 @Composable
 fun KelaileGlyph(
     kind: KelaileGlyphKind,

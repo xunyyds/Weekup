@@ -41,8 +41,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONTokener
 
-
-
 private val LOGIN_HOSTS = listOf("open.weixin.qq.com", "login.weixin.qq.com", "weixin.qq.com")
 
 private fun loginHost(value: String): Boolean = runCatching {
@@ -56,7 +54,6 @@ private fun schoolWebUrl(value: String): Boolean = runCatching {
         !uri.host.isNullOrBlank() && uri.userInfo == null
 }.getOrDefault(false)
 
-                                                                                                     
 @SuppressLint("SetJavaScriptEnabled")
 @Suppress("DEPRECATION")
 @Composable
@@ -75,16 +72,12 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     var menuOpen by remember { mutableStateOf(false) }
     var showAddress by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
-    
-    var chromeVisible by remember(url) { mutableStateOf(true) }
-    
 
+    var chromeVisible by remember(url) { mutableStateOf(true) }
 
     var desktopMode by remember(url) { mutableStateOf(true) }
-    
-    val desktopModeState = rememberUpdatedState(desktopMode)
-    
 
+    val desktopModeState = rememberUpdatedState(desktopMode)
 
     val latestImport by rememberUpdatedState(onImport)
     var webView by remember(url) { mutableStateOf<WebView?>(null) }
@@ -93,7 +86,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     var error by remember(url) { mutableStateOf<String?>(if (schoolWebUrl(url)) null else "地址无效：仅允许不含账号密码的 HTTP / HTTPS 网站。") }
     var address by remember(url) { mutableStateOf(url) }
     var recognized by remember(url) { mutableStateOf<SchoolImport?>(null) }
-    
+
     val lifetime = remember(url) { BrowserLifetime() }
     fun back() {
         val browser = webView
@@ -101,11 +94,9 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     }
     BackHandler { if (recognized != null) recognized = null else back() }
 
-
     LaunchedEffect(configuration.screenWidthDp, configuration.screenHeightDp, configuration.orientation, desktopMode) {
         val browser = webView ?: return@LaunchedEffect
         if (!schoolWebUrl(browser.url.orEmpty())) return@LaunchedEffect
-
 
         browser.settings.apply {
             userAgentString = if (desktopMode) DESKTOP_CHROME_UA else null
@@ -141,39 +132,35 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
             lifetime.view = null
         }
     }
-                                                                                          
+
     fun applyViewportScript(browser: WebView, desktop: Boolean) {
         val page = browser.url.orEmpty()
         if (!schoolWebUrl(page)) return
 
-
         if (desktop) browser.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
         browser.evaluateJavascript(CAS_FIT_SCRIPT, null)
 
-
         browser.evaluateJavascript(VH_HEIGHT_REPAIR_SCRIPT, null)
     }
-    
+
     fun applyMode(browser: WebView, desktop: Boolean) {
         desktopMode = desktop
-        
+
         browser.settings.apply {
             userAgentString = if (desktop) DESKTOP_CHROME_UA else null
 
-
             useWideViewPort = false
-
 
             loadWithOverviewMode = needsOverviewScale(browser.url.orEmpty())
         }
         browser.setInitialScale(0)
         applyViewportScript(browser, desktop)
     }
-    
+
     fun switchViewMode() {
         val target = !desktopMode
         desktopMode = target
-        
+
         lifetime.generation++
         recognized = null
         error = if (target) "已切换为桌面模式（桌面版 UA + 宽布局视口），正在重新加载。"
@@ -191,7 +178,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         val generation = lifetime.generation
         scope.launch {
             try {
-
 
                 val imported = withTimeout(45_000) {
                     var failure: Exception? = null
@@ -236,15 +222,13 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     }
     Box(Modifier.fillMaxSize().imePadding()) {
     Column(Modifier.fillMaxSize()) {
-        
-        
-        
+
         Column(Modifier.fillMaxWidth().animateContentSize()) {
         if (chromeVisible) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = ::back, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("返回", maxLines = 1) }
             if (!compactToolbar) {
-                
+
                 TextButton(onClick = ::switchViewMode, contentPadding = PaddingValues(horizontal = 8.dp)) {
                     Text(if (desktopMode) "桌面" else "手机", maxLines = 1)
                 }
@@ -288,12 +272,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
             modifier = Modifier.weight(1f).fillMaxWidth(),
             factory = { context ->
                 DesktopSchoolWebView(context, onSwipe = { upward ->
-                    
+
                     chromeVisible = !upward
                 }).apply {
-                    
-                    var lastPageHeightPx = -1
 
+                    var lastPageHeightPx = -1
 
                     if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                         WebView.setWebContentsDebuggingEnabled(true)
@@ -304,12 +287,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                     isHorizontalScrollBarEnabled = true
                     isVerticalScrollBarEnabled = true
                     scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
-                    
+
                     val desktop = desktopModeState.value
                     setInitialScale(0)
                     settings.apply {
                         userAgentString = if (desktop) DESKTOP_CHROME_UA else null
-
 
                         useWideViewPort = false
                         loadWithOverviewMode = needsOverviewScale(url)
@@ -327,13 +309,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         javaScriptCanOpenWindowsAutomatically = true
                         setSupportMultipleWindows(true)
 
-
                         mediaPlaybackRequiresUserGesture = true
                     }
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     setDownloadListener { _, _, _, _, _ -> error = "不支持下载或外部跳转，请直接打开网页课表。" }
-
 
                     webChromeClient = object : WebChromeClient() {
                         override fun onCreateWindow(
@@ -354,7 +334,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                                 ): Boolean = false
                             }
 
-
                             popup.webChromeClient = object : WebChromeClient() {
                                 override fun onCloseWindow(window: WebView) {
                                     runCatching { (window.parent as? android.view.ViewGroup)?.removeView(window) }
@@ -373,7 +352,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = block(request.url.toString())
                         override fun shouldOverrideUrlLoading(view: WebView, target: String): Boolean = block(target)
-                        
 
                         private fun block(target: String): Boolean {
                             if (schoolWebUrl(target)) return false
@@ -383,13 +361,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                         override fun onPageStarted(view: WebView, target: String?, favicon: Bitmap?) {
                             if (!lifetime.alive) return
 
-
                             applyViewportScript(view, desktopModeState.value)
                             lifetime.generation++
                             recognized = null
-                            
-                            lastPageHeightPx = -1
 
+                            lastPageHeightPx = -1
 
                             if (!schoolWebUrl(target.orEmpty()) && !loginHost(target.orEmpty())) {
                                 view.stopLoading()
@@ -406,7 +382,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                             loading = false
                             if (schoolWebUrl(target.orEmpty())) {
                                 address = target.orEmpty()
-                                
+
                                 applyViewportScript(view, desktopModeState.value)
 
                                 view.evaluateJavascript(PAGE_HEIGHT_SCRIPT) { height ->
@@ -439,7 +415,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                             }
                         }
                         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, sslError: SslError) {
-                            handler.cancel() 
+                            handler.cancel()
                             if (lifetime.alive) {
                                 lifetime.generation++
                                 view.stopLoading()
@@ -461,9 +437,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
             },
         ) } else Spacer(Modifier.weight(1f))
     }
-    
-    
-    
+
     if (!chromeVisible) Box(
         Modifier.align(Alignment.TopCenter).fillMaxWidth().height(33.dp).background(
             androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -508,7 +482,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
             CookieManager.getInstance().removeAllCookies {
                 CookieManager.getInstance().flush()
                 if (lifetime.alive) {
-                    
+
                     browser?.loadUrl(url)
                     error = "已清除登录会话、网页存储和缓存。"
                 }
@@ -552,7 +526,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     }
 }
 
-                                                                                                   
 @SuppressLint("ViewConstructor")
 private class DesktopSchoolWebView(context: Context, private val onSwipe: (upward: Boolean) -> Unit) : WebView(context) {
     private var downX = 0f
@@ -561,9 +534,6 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
     private var multiTouch = false
     private var swiped = false
 
-    
-    
-    
     private var gestureLock = GESTURE_UNDECIDED
     private var prevCenterX = 0f
     private var prevCenterY = 0f
@@ -580,25 +550,22 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
                 startedAt = SystemClock.uptimeMillis()
                 multiTouch = false
                 swiped = false
-                
-                
+
                 parent?.requestDisallowInterceptTouchEvent(true)
                 beginGesture()
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 multiTouch = true
-                
-                
+
                 requestDisallowInterceptTouchEvent(false)
-                
+
                 if (gestureLock == GESTURE_NONE) {
                     beginGesture()
                     seedCenter(event)
                 }
             }
             MotionEvent.ACTION_POINTER_UP -> {
-                
-                
+
                 if (gestureLock == GESTURE_PAN) {
                     val lifted = event.actionIndex
                     val keep = if (lifted == 0) 1 else 0
@@ -610,8 +577,7 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
             }
             MotionEvent.ACTION_MOVE -> {
                 if (gestureLock == GESTURE_PAN) {
-                    
-                    
+
                     if (event.pointerCount >= 2) {
                         val cx = (event.getX(0) + event.getX(1)) / 2f
                         val cy = (event.getY(0) + event.getY(1)) / 2f
@@ -619,45 +585,42 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
                         prevCenterX = cx
                         prevCenterY = cy
                     } else {
-                        
+
                         scrollBy(-(event.x - prevCenterX).toInt(), -(event.y - prevCenterY).toInt())
                         prevCenterX = event.x
                         prevCenterY = event.y
                     }
-                    
-                    
+
                     return true
                 }
                 if (gestureLock != GESTURE_PINCH && event.pointerCount >= 2) {
-                    
+
                     val cx = (event.getX(0) + event.getX(1)) / 2f
                     val cy = (event.getY(0) + event.getY(1)) / 2f
                     val span = kotlin.math.hypot(event.getX(1) - event.getX(0), event.getY(1) - event.getY(0))
-                    
+
                     if (gestureLock == GESTURE_UNDECIDED) {
                         totalDx += cx - prevCenterX
                         totalDy += cy - prevCenterY
                         totalPinch += span - prevSpan
-                        
-                        
+
                         if (kotlin.math.hypot(totalDx, totalDy) >= TWO_FINGER_PAN_THRESHOLD_PX ||
                             kotlin.math.abs(totalPinch) >= TWO_FINGER_PAN_THRESHOLD_PX
                         ) {
                             val pan = kotlin.math.abs(totalPinch) <
                                 kotlin.math.hypot(totalDx, totalDy) && canPanContent()
-                            
+
                             gestureLock = if (pan) GESTURE_PAN else GESTURE_PINCH
-                            
+
                             swiped = true
-                            
-                            
+
                             requestDisallowInterceptTouchEvent(gestureLock == GESTURE_PAN)
                         }
                     }
                     prevCenterX = cx
                     prevCenterY = cy
                     prevSpan = span
-                    
+
                     if (gestureLock == GESTURE_PAN) return true
                 }
             }
@@ -667,8 +630,7 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
                 val elapsed = SystemClock.uptimeMillis() - startedAt
                 val dy = event.y - downY
                 val dx = event.x - downX
-                
-                
+
                 if (multiTouch || handledByPan || elapsed > 1200L || kotlin.math.abs(dy) < 60f || kotlin.math.abs(dy) < kotlin.math.abs(dx)) {
                     swiped = true
                 } else {
@@ -702,8 +664,6 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
         swiped = true
     }
 
-    
-    
     private fun canPanContent(): Boolean =
         canScrollVertically(1) || canScrollVertically(-1) || canScrollHorizontally(1) || canScrollHorizontally(-1)
 
@@ -712,8 +672,7 @@ private class DesktopSchoolWebView(context: Context, private val onSwipe: (upwar
         const val GESTURE_UNDECIDED = 1
         const val GESTURE_PAN = 2
         const val GESTURE_PINCH = 3
-        
-        
+
         const val TWO_FINGER_PAN_THRESHOLD_PX = 16f
     }
 }
@@ -724,9 +683,6 @@ private fun Context.browserActivity(): Activity? = when (this) {
     else -> null
 }
 
-
-
-
 private val PAGE_HEIGHT_SCRIPT = """
 (function() {
   var d = document.documentElement;
@@ -736,16 +692,7 @@ private val PAGE_HEIGHT_SCRIPT = """
 })()
 """.trimIndent()
 
-
-
-
-
-
-
-
 private const val DESKTOP_VIEWPORT_WIDTH = 700
-
-
 
 private val VH_HEIGHT_REPAIR_SCRIPT = """
 (function() {
@@ -755,7 +702,7 @@ private val VH_HEIGHT_REPAIR_SCRIPT = """
       if (!H) return false;
       var host = document.head || document.documentElement;
       if (!host) return false;
-      
+
       var shell = document.querySelector('.edu-container, .edu-container-new, [class*="edu-container"]');
       if (!shell) return true;
       var px = H + 'px';
@@ -787,18 +734,14 @@ private val VH_HEIGHT_REPAIR_SCRIPT = """
 })()
 """.trimIndent()
 
-
-
 private fun needsOverviewScale(url: String): Boolean = runCatching {
     val path = Uri.parse(url).path.orEmpty().lowercase()
     path.contains("/cas/") || path.endsWith("sso.jsp")
 }.getOrDefault(false)
 
-
-
 private val DESKTOP_VIEWPORT_SCRIPT = """
 (function() {
-  
+
   var CONTENT = 'width=@@W@@';
 
   function isFixed() {
@@ -818,7 +761,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
     var host = document.head || document.documentElement;
     if (!host) return 'skip';
     if (!isFixed()) {
-      
+
       var mine = document.querySelector('meta[data-kelaile-viewport]');
       if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
       return 'skip';
@@ -836,7 +779,6 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
     } catch (e) { return 'skip'; }
   }
 
-  
   var verdict = apply();
   if (verdict === 'fixed') return verdict;
   var tries = 0;
@@ -851,7 +793,7 @@ private val DESKTOP_VIEWPORT_SCRIPT = """
 
 private val CAS_FIT_SCRIPT = """
 (function() {
-  
+
   var CSS = ''
     + 'html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;'
     + '  overflow-y:auto!important;}'
@@ -893,8 +835,6 @@ private val CAS_FIT_SCRIPT = """
 })()
 """.trimIndent()
 
-
-
 private class BrowserLifetime {
     var alive = true
     var generation = 0
@@ -902,10 +842,6 @@ private class BrowserLifetime {
 }
 
 private const val DESKTOP_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-
-
-
-
 
 private val TABLE_EXTRACTION = """
 (function() {
@@ -973,8 +909,6 @@ private val TABLE_EXTRACTION = """
   return html;
 })()
 """.trimIndent()
-
-
 
 private val OPEN_TIMETABLE_SCRIPT = """
 (function() {

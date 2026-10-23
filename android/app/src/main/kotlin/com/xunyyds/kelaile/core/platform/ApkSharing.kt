@@ -15,12 +15,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-                                                                                               
 object ApkSharing {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val sharing = AtomicBoolean(false)
 
-                                                                                          
     fun shareInstalledApk(context: Context) {
         if (!sharing.compareAndSet(false, true)) return
         val app = context.applicationContext
@@ -57,7 +55,7 @@ object ApkSharing {
         check(directory.isDirectory || directory.mkdirs()) { "无法创建 APK 分享目录" }
         val destination = File(directory, "课来了-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}-arm64-v8a.apk").canonicalFile
         check(destination.parentFile == directory) { "无效的 APK 分享路径" }
-        
+
         val temporary = File.createTempFile("apk-", ".tmp", directory)
         try {
             File(info.sourceDir).inputStream().use { input ->

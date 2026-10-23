@@ -13,7 +13,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import java.util.concurrent.Executors
 
-                                                                                                              
 object Reminders {
     private const val CHANNEL = "classes"
     private const val PREFS = "native_class_reminders"
@@ -23,19 +22,18 @@ object Reminders {
     @Synchronized
     fun sync(context: Context, data: AppData) {
         val app = context.applicationContext
-        
-        
+
         val latest = Repository(app).load()
         val events = ReminderPlan.events(latest)
         val alarm = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        
+
         for (id in 1..MAX) pending(app, id, PendingIntent.FLAG_NO_CREATE)?.let { alarm.cancel(it); it.cancel() }
         check(prefs.edit().clear().commit()) { "无法保存提醒状态" }
         if (events.isEmpty()) return
         if (!notificationAllowed(app)) return
         channel(app)
-        
+
         val editor = prefs.edit()
         events.forEachIndexed { i, event ->
             val id = i + 1
@@ -107,9 +105,9 @@ class ReminderReceiver : BroadcastReceiver() {
         ReceiverWorker.execute {
             try {
                 if (id !in 1..300) return@execute
-                
+
                 for (dueId in 1..300) Reminders.deliver(context.applicationContext, dueId)
-                
+
                 Reminders.sync(context.applicationContext, Repository(context).load())
             } catch (failure: Exception) {
                 android.util.Log.e("KelaileReminders", "无法发送或补充课程提醒", failure)
@@ -118,9 +116,6 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 }
 
-                                                                                                    
-                                                                                          
-   
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)) return
@@ -134,7 +129,6 @@ class BootReceiver : BroadcastReceiver() {
 }
 
 private object ReceiverWorker {
-
 
     private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "kelaile-reminders") }
     fun execute(task: () -> Unit) { executor.execute(task) }

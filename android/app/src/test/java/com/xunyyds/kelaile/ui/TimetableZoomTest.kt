@@ -10,8 +10,6 @@ class TimetableZoomTest {
 
     private fun rungs() = zoomLadder()
 
-    // ---------- 档位阶梯 ----------
-
     @Test
     fun ladderStartsAtMinAndEndsAtMax() {
         val steps = rungs()
@@ -40,8 +38,7 @@ class TimetableZoomTest {
 
     @Test
     fun everyPinchOfOneStepReachesTheNextRung() {
-        // 用户抱怨「缩放到不了下一档」：只要一次捏合能放大 >= 一档，
-        // 吸附时就该真的进到下一档，而不是被拽回原档。
+
         val steps = rungs()
         steps.zipWithNext().forEach { (a, b) ->
             val zoomed = a * GRID_ZOOM_STEP
@@ -76,8 +73,6 @@ class TimetableZoomTest {
         assertEquals("上界低于下界时只留下界", listOf(2f), zoomLadder(min = 2f, max = 1f))
         assertEquals("公比 <= 1 等于没有阶梯", listOf(1f), zoomLadder(min = 1f, max = 3f, step = 1f))
     }
-
-    // ---------- 几何 ----------
 
     private fun layout(
         dayCount: Int = 7,
@@ -119,20 +114,18 @@ class TimetableZoomTest {
     @Test
     fun hitTestingMapsScreenToGrid() {
         val l = layout()
-        // 节次栏右侧第一列、表头下方第一行。
+
         assertEquals(0, l.columnAt(l.gutterPx + 1f, offsetX = 0f, zoom = 1f))
         assertEquals(1, l.columnAt(l.gutterPx + l.cellWidth(1f) + 1f, offsetX = 0f, zoom = 1f))
         assertEquals(0, l.rowAt(l.headerPx + 1f, offsetY = 0f, zoom = 1f))
         assertEquals(2, l.rowAt(l.headerPx + l.cellHeight(1f) * 2.5f, offsetY = 0f, zoom = 1f))
-        // 内容向上滚了 1.5 行，同一个屏幕位置就落到更靠后的行上。
+
         assertEquals(4, l.rowAt(l.headerPx + l.cellHeight(1f) * 2.5f, offsetY = l.cellHeight(1f) * 1.5f, zoom = 1f))
-        // 越界值必须被夹在合法下标内。
+
         assertEquals(0, l.columnAt(-9999f, offsetX = 0f, zoom = 1f))
         assertEquals(l.dayCount - 1, l.columnAt(99999f, offsetX = 0f, zoom = 1f))
         assertEquals(l.periodCount - 1, l.rowAt(99999f, offsetY = 0f, zoom = 1f))
     }
-
-    // ---------- 夹紧与橡皮筋 ----------
 
     @Test
     fun clampOffsetKeepsOffsetInsideContent() {
@@ -169,21 +162,21 @@ class TimetableZoomTest {
     @Test
     fun anchoredOffsetClampsButStillMovesContentTheRightWay() {
         val viewport = 1080f
-        // 已经在左边界上捏合缩小：锚点补偿算出的负值必须被夹回 0，而不是留成负偏移。
+
         val left = anchoredOffset(0f, 400f, 0.8f, viewport, 3000f * 0.8f)
         assertEquals(0f, left, 1e-3f)
-        // 放大且锚点内容本来就在右边界内：结果严格等于锚点的等比映射，不做任何截断。
+
         val content = 3000f * 1.4f
         val right = anchoredOffset(3000f - viewport, 0f, 1.4f, viewport, content)
         assertEquals((3000f - viewport) * 1.4f, right, 1e-2f)
-        // 锚点映射越界时才截断到 content - viewport。
+
         val over = anchoredOffset(content - viewport, viewport, 1.4f, viewport, content)
         assertEquals(content - viewport, over, 1e-2f)
     }
 
     @Test
     fun scalingAroundTheCentroidDoesNotMoveThatCentroidOnEitherAxis() {
-        // 这条是「捏合时内容乱跳」的回归测试：旧实现只补 X，Y 会跳。
+
         val l = layout(availH = 2000f)
         val zoom0 = 1.4f
         val offsetX = 220f
@@ -196,14 +189,11 @@ class TimetableZoomTest {
         val nx = anchoredOffset(offsetX, cx, ratio, l.availW, l.contentWidth(next))
         val ny = anchoredOffset(offsetY, cy, ratio, l.availH, l.contentHeight(next))
 
-        // 屏幕 (cx, cy) 处原来是第几行第几列，缩放后还得是同一个点。
         val contentX = offsetX + cx
         val contentY = offsetY + cy
         assertEquals(contentX * ratio, nx + cx, 1e-2f)
         assertEquals(contentY * ratio, ny + cy, 1e-2f)
     }
-
-    // ---------- 状态收敛 ----------
 
     @Test
     fun gridStateClampsZoomAndOffsetsTogether() {
@@ -235,19 +225,15 @@ class TimetableZoomTest {
         val state = TimetableGridState(GRID_MAX_ZOOM)
         state.offsetY = tall.maxOffsetY(GRID_MAX_ZOOM)
         state.clampInto(shorter)
-        // 收敛只负责夹回合法区间，不该把内容往上顶走。
+
         assertEquals(tall.maxOffsetY(GRID_MAX_ZOOM), state.offsetY, 1e-2f)
         assertTrue(state.offsetY <= shorter.maxOffsetY(state.zoom) + 1e-2f)
 
-        // 反过来，超出新上限的值必须被夹到新上限。
         state.offsetY = shorter.maxOffsetY(state.zoom) + 9999f
         state.clampInto(shorter)
         assertEquals(shorter.maxOffsetY(state.zoom), state.offsetY, 1e-2f)
     }
 
-    // ---------- 惯性 ----------
-
-    /** 假时钟：每帧 16.67ms，避免单测真的等动画。 */
     private fun fakeClock(stepNanos: Long = 16_666_667L): suspend () -> Long {
         var now = 0L
         return { now += stepNanos; now }
@@ -259,7 +245,7 @@ class TimetableZoomTest {
         val result = decayInto(0f, 3000f, 0f, 5000f, fakeClock()) { seen += it }
         assertTrue("惯性必须真的滑过", seen.size > 3)
         assertTrue("惯性结果必须单调增", seen.zipWithNext().all { (a, b) -> b >= a - 1e-3f })
-        // 速度衰减到阈值就收工，所以终点是有限位移而不是 v/k 的极限。
+
         val expected = decayDistance(3000f, decaySeconds(3000f))
         assertEquals("没撞墙就停在速度阈值处", expected, result, 1f)
         assertTrue("终点必须小于渐近上限", result < 3000f / GRID_FLING_FRICTION)
@@ -300,11 +286,11 @@ class TimetableZoomTest {
 
     @Test
     fun flingDistanceIsFrameRateIndependent() {
-        // 同样的速度与时间，位移只取决于解析式，不该随帧率变化。
+
         val fast = decayDistance(4000f, 0.25f)
         val slow = decayDistance(4000f, 0.25f)
         assertEquals(fast, slow, 1e-4f)
-        // 单调：滑得越久走得越远，但趋于上限 v/k。
+
         assertTrue(decayDistance(4000f, 0.5f) > decayDistance(4000f, 0.25f))
         assertTrue(decayDistance(4000f, 100f) < 4000f / GRID_FLING_FRICTION + 1e-3f)
     }

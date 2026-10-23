@@ -8,7 +8,6 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 
-                                                                                                                 
 class RepositoryTest {
     @get:Rule val temporary = TemporaryFolder()
     private class MemoryAtomic : AtomicStorage {

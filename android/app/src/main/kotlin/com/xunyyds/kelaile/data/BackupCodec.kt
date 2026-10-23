@@ -4,7 +4,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 
-                                                                                           
 object BackupCodec {
     const val MAX_CHARS = 2_000_000
 
@@ -34,7 +33,7 @@ object BackupCodec {
     fun decode(source: String): AppData {
         require(source.length <= MAX_CHARS) { "课表文件过大" }
         try {
-            
+
             val tokener = org.json.JSONTokener(source)
             val root = tokener.nextValue() as? JSONObject ?: error("课表必须是对象")
             require(tokener.nextClean() == '\u0000') { "JSON 尾部存在额外内容" }
@@ -85,7 +84,7 @@ object BackupCodec {
     }
 
     private fun date(value: String): LocalDate {
-        
+
         require(Regex("\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:?\\d{2})?)?").matches(value))
         return LocalDate.parse(value.take(10))
     }

@@ -61,10 +61,8 @@ fun KelaileApp() {
     var details by remember { mutableStateOf<CourseSession?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
 
-
     var viewWeek by remember { mutableIntStateOf(1) }
     var immersive by remember { mutableStateOf(false) }
-
 
     var editMode by remember { mutableStateOf(false) }
     val systemBars = rememberSystemBars()
@@ -87,7 +85,6 @@ fun KelaileApp() {
     }
 
     var pendingMove by remember { mutableStateOf<Triple<String, String, Pair<Int, Int>>?>(null) }
-
 
     var offerPeriodEdit by remember { mutableStateOf(false) }
     var dockHeightPx by remember { mutableIntStateOf(0) }
@@ -118,7 +115,6 @@ fun KelaileApp() {
         if (uri != null && !busy) scope.launch {
             busy = true
             try {
-
 
                 val (backup, sheet) = service.readImport(uri)
                 if (sheet != null) {
@@ -164,7 +160,6 @@ fun KelaileApp() {
         val next = when(data.settings.theme) { "system" -> "dark"; "dark" -> "light"; else -> "system" }
         commit(data.copy(settings = data.settings.copy(theme = next)))
     }
-
 
     val overlayDock = data.settings.navigationStyle != "default"
     LaunchedEffect(data.settings.currentWeek) { viewWeek = data.settings.currentWeek }
@@ -256,7 +251,6 @@ fun KelaileApp() {
             }
         }
 
-
         if (ready && page == "home" && overlayDock && !(immersive && data.settings.autoHideBars)) {
             KelaileDock(
                 data.settings.navigationStyle, tab, { tab = it },
@@ -271,7 +265,6 @@ fun KelaileApp() {
             visible = searchOpen,
             data = data,
             onDismiss = { searchOpen = false },
-
 
             onCourse = { id ->
                 searchOpen = false
@@ -340,7 +333,6 @@ fun KelaileApp() {
                     val from = data.settings.periods.firstOrNull { it.period == course.startPeriod }?.startMinutes
                     val to = data.settings.periods.firstOrNull { it.period == course.endPeriod }?.endMinutes
 
-
                     val span = if (from != null && to != null && to > from) "\n时间：${clock(from)}—${clock(to)}" else ""
                     Text("教师：${course.teacher}\n地点：${course.location}\n${dayNames[course.weekday-1]} · 第 ${course.startPeriod}—${course.endPeriod} 节$span\n周次：${course.weeks.joinToString("、")}")
                     Row { Button(onClick = { editingId = course.id; details = null; page = "course" }) { Text("编辑课程") }; TextButton(onClick = { confirmDelete = true }) { Text("删除课程") } }
@@ -353,4 +345,3 @@ fun KelaileApp() {
     }
     }
 }
-

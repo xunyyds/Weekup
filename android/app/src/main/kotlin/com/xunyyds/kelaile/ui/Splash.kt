@@ -42,10 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-   
-                                                                                          
-                                                                                      
-   
 @Composable
 fun KelaileSplash(visible: Boolean, modifier: Modifier = Modifier) {
     val motion = kelaileMotionEnabled()
@@ -128,4 +124,3 @@ fun KelaileSplash(visible: Boolean, modifier: Modifier = Modifier) {
         }
     }
 }
-

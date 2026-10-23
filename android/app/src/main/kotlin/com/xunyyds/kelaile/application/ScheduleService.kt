@@ -9,7 +9,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-                                                                                                          
 class ScheduleService(context:Context) {
     private val app=context.applicationContext
     private val repository=Repository(app)
@@ -34,7 +33,6 @@ class ScheduleService(context:Context) {
         } ?: error("无法读取文件")
         BackupCodec.decode(text)
     }
-
 
     suspend fun readImport(uri: Uri): Pair<AppData?, SchoolImport?> = withContext(Dispatchers.IO) {
         val name = uri.lastPathSegment.orEmpty().lowercase()

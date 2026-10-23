@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-                                                                                          
 @Composable
 fun CheckMark(selected: Boolean, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, size: Dp = 18.dp) {
     val progress by animateFloatAsState(
@@ -68,7 +67,6 @@ fun CheckMark(selected: Boolean, modifier: Modifier = Modifier, color: Color = M
     }
 }
 
-                                                                                    
 @Composable
 fun CheckRow(title: String, selected: Boolean, onClick: () -> Unit, subtitle: String = "") {
     Row(
@@ -89,7 +87,6 @@ fun CheckRow(title: String, selected: Boolean, onClick: () -> Unit, subtitle: St
     }
 }
 
-                                                                                   
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChoiceSheet(title: String, value: String, options: Map<String, String>, onDismiss: () -> Unit, onSelect: (String) -> Unit) {

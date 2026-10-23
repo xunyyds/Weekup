@@ -4,23 +4,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.util.UUID
 
-                                                                                              
-                                                                                          
-                                                                                              
-   
 object SchoolParser {
     private val weekday = Regex("^(?:星期|周)([一二三四五六日天])$")
 
-
     private val slot = Regex("^(?:第\\s*)?(\\d{1,2})\\s*(?:[-—~～至]\\s*(\\d{1,2}))?\\s*节")
-
 
     private val slotChinese = Regex("^第\\s*([一二三四五六七八九十]+)\\s*节")
 
-
     private val slotHint = Regex("\\(\\s*(\\d{1,2})\\s*,\\s*(\\d{1,2})\\s*小节\\s*\\)")
-
-
 
     private fun periodRange(label: String): Pair<Int, Int>? {
         slotHint.find(label)?.let { m ->
@@ -37,13 +28,11 @@ object SchoolParser {
             val digits = m.groupValues[1].mapNotNull { ch -> "一二三四五六七八九十".indexOf(ch).let { if (it >= 0) it + 1 else null } }
             if (digits.isEmpty()) return null
 
-
             return if (digits.size == 2 && digits.all { it in 1..9 }) digits[0] to digits[1]
             else digits.fold(0) { acc, d -> acc * 10 + d.coerceAtMost(9) }.let { it to it }
         }
         return null
     }
-
 
     private val weekExpression = Regex("(\\d+(?:\\s*[-—~～至]\\s*\\d+)?(?:\\s*[,，、]\\s*\\d+(?:\\s*[-—~～至]\\s*\\d+)?)*)\\s*(?:(?:[（(]\\s*([单双])?\\s*周\\s*[）)])|(?:周\\s*(?:[（(]\\s*([单双])\\s*周?\\s*[）)])?)|(?:([单双])\\s*周))")
 
@@ -54,7 +43,6 @@ object SchoolParser {
             table.select("tr").filter { it.closest("table") == table }.any { row -> cells(row).count { weekday.matches(it.text().trim()) } >= 2 }
         }
         require(candidates.isNotEmpty()) { "未找到唯一可识别的课表；需要明确的星期表头" }
-
 
         val failures = mutableListOf<String>()
         val parsed = candidates.mapNotNull { table ->
@@ -74,15 +62,12 @@ object SchoolParser {
         return trailingMetadata(doc, courses, periods, existingSchool)
     }
 
-
-
     private fun parseTable(table: Element): Pair<List<CourseSession>, List<PeriodTime>> {
         require(table.select("table").none { it !== table }) { "不支持嵌套课表" }
         val rows = table.select("tr")
         var columns: Map<Int, Int>? = null
         var width = 0
         val courses = mutableListOf<CourseSession>()
-
 
         val skipped = mutableListOf<String>()
         val periods = linkedMapOf<Int, PeriodTime>()
@@ -101,7 +86,6 @@ object SchoolParser {
             if (cells.isEmpty()) return@forEach
             val first = cells.first().text().trim()
 
-
             val noteLike = first.startsWith("备注") || first.startsWith("说明")
             val spansRow = cells.any { columnSpan(it) >= maxOf(2, width - 1) }
             if (noteLike || spansRow) return@forEach
@@ -111,12 +95,10 @@ object SchoolParser {
                 return@forEach
             }
 
-
             require(cells.all { rowSpan(it) == 1 && columnSpan(it) == 1 }) { "暂不支持合并单元格课表，请使用文件导入" }
             require(cells.size == width) { "课表列数不一致" }
             val (start, end) = range
             val times = Regex("(\\d{1,2})[:：](\\d{2})\\s*[-—~～至]\\s*(\\d{1,2})[:：](\\d{2})").find(first)
-
 
             if (times != null) {
                 val (h1, m1, h2, m2) = times.destructured
@@ -133,7 +115,6 @@ object SchoolParser {
                 }
             }
 
-
             val spansWide = cells.any { c ->
                 (c.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1) >= 3 ||
                     (c.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1) >= 3
@@ -142,7 +123,6 @@ object SchoolParser {
             require(cells.withIndex().all { (index, cell) -> index == 0 || index in mapping || cell.text().isBlank() }) { "非星期列含有未知内容" }
             mapping.forEach { (index, day) ->
                 val cell = cells[index]
-
 
                 val blocks = cell.select("[class=kbcontent], .kbcontent:not([class*=kbcontent1])")
                     .let { if (it.isEmpty()) listOf(cell) else it.toList() }
@@ -153,12 +133,9 @@ object SchoolParser {
                     val lines = copy.wholeText().replace('\u00a0', ' ').split('\n').map { it.trim() }.filter { it.isNotEmpty() }
                     if (lines.isEmpty() || lines.all { it in listOf("-", "--", "无", "暂无课程") }) return@blockLoop
 
-
                     if (lines.first().let { it.startsWith("备注") || it.startsWith("说明") }) return@blockLoop
 
-
                     val segments = splitByWeek(lines)
-
 
                     val useLabels = segments.size == 1
                     for (segment in segments) {
@@ -191,7 +168,6 @@ object SchoolParser {
             existingSchool?.trim()?.takeIf { it.isNotEmpty() } ?: recognizeSchool(doc))
     }
 
-                                                                                                    
     private fun recognizeSchool(doc: org.jsoup.nodes.Document): String? {
         val evidence = mutableListOf(doc.title())
         doc.select("header,h1").filter { it.closest("form,[hidden],[aria-hidden=true]") == null }.forEach { element ->
@@ -205,7 +181,7 @@ object SchoolParser {
         }
         val names = evidence.flatMap { value ->
             value.split(Regex("[|｜—–\\-:：/\\s·•,，;；()（）【】\\[\\]]+")).mapNotNull { part ->
-                
+
                 val match = Regex("^([\\p{IsHan}]{2,30}?(?:大学|学院|学校))(?:教务(?:处|系统|管理系统|管理平台)?|智慧校园|统一身份认证|信息门户|官网|官方网站|课表查询|课程表|学生课表)?$").matchEntire(part)
                 val name = match?.groupValues?.get(1) ?: return@mapNotNull null
                 if (Regex("教务|管理系统|未知|某某|示例|测试|你的|您的|本校|我的").containsMatchIn(name) ||
@@ -215,19 +191,14 @@ object SchoolParser {
         return names.singleOrNull()
     }
 
-
-
     private fun columnSpan(cell: Element) = cell.attr("colspan").ifEmpty { "1" }.toIntOrNull() ?: 1
 
     private fun rowSpan(cell: Element) = cell.attr("rowspan").ifEmpty { "1" }.toIntOrNull() ?: 1
-
-
 
     private fun splitByWeek(lines: List<String>): List<List<String>> {
         val body = lines.filterNot { isDivider(it) }
         val segments = mutableListOf<List<String>>()
         var pending = mutableListOf<String>()
-
 
         var closed = false
         for (line in body) {
@@ -247,7 +218,6 @@ object SchoolParser {
                 closed = true
             }
 
-
             val rest = line.substring(cursor).trim()
             if (rest.isNotEmpty()) segments[segments.lastIndex] = segments.last() + rest
         }
@@ -255,10 +225,7 @@ object SchoolParser {
         return segments
     }
 
-
-
     private fun isDivider(line: String) = Regex("^[-—_=*·•~]{3,}$").matches(line.trim())
-
 
     private fun isMetaLine(line: String): Boolean {
         val t = line.trim()
@@ -266,8 +233,6 @@ object SchoolParser {
         if (Regex("编号|讲课|学分|备注|说明").containsMatchIn(t)) return true
         return Regex("^\\[?\\d+\\s*[-—~～至]\\s*\\d+\\s*节\\]?$").matches(t)
     }
-
-
 
     private fun buildCourse(lines: List<String>, day: Int, start: Int, end: Int, block: Element, useLabels: Boolean): CourseSession? {
         val text = lines.joinToString(" ")
@@ -285,12 +250,10 @@ object SchoolParser {
         }
         if (weeks.isEmpty()) return null
 
-
         val head = lines.takeWhile { !weekExpression.containsMatchIn(it) }
         val headText = text.substring(0, wm.range.first).trim()
         val name = (head.firstOrNull() ?: headText.split(' ').firstOrNull().orEmpty()).trim()
         if (name.isEmpty() || weekExpression.containsMatchIn(name)) return null
-
 
         val labelledTeacher = if (useLabels) block.selectFirst("[title=老师],[title=教师]")?.text()?.trim().orEmpty() else ""
         val labelledRoom = if (useLabels) block.selectFirst("[title=教室],[title=地点]")?.text()?.trim().orEmpty() else ""

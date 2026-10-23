@@ -2,7 +2,6 @@ package com.xunyyds.kelaile.core.prefs
 
 import android.content.Context
 
-                                                                                  
 class SearchHistory(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("kelaile_search", Context.MODE_PRIVATE)
 

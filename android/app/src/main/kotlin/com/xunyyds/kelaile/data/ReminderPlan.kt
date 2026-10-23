@@ -2,7 +2,6 @@ package com.xunyyds.kelaile.data
 
 import java.time.ZoneId
 
-                                                                                                      
 data class ReminderEvent(val course: CourseSession, val startsAtMillis: Long, val triggerAtMillis: Long)
 
 object ReminderPlan {

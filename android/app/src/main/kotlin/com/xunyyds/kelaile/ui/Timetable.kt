@@ -152,16 +152,12 @@ fun Timetable(
     var colDrag by remember { mutableFloatStateOf(0f) }
     var rowDrag by remember { mutableFloatStateOf(0f) }
 
-    // 缩放档位跨配置变更保留；偏移量不保留（旋转后重新对齐到可见区域即可）。
     var zoomMemory by rememberSaveable { mutableFloatStateOf(GRID_MIN_ZOOM) }
     val grid = remember { TimetableGridState(zoomMemory) }
     LaunchedEffect(grid) {
         snapshotFlow { grid.zoom }.distinctUntilChanged().collect { zoomMemory = it }
     }
 
-    // 长按判定靠「手指按住不动」时的时间流逝，而按住不动不会产生指针事件，
-    // 所以在手势协程里等超时是等不到的（实测：真长按毫无反应，慢速拖动反而误进编辑模式）。
-    // 这里改用组合侧计时器：按下时挂起一个定时任务，手指一动就取消。
     var longPressArmed by remember { mutableStateOf(false) }
 
     val gutterPx = with(density) { gutterWidth.toPx() }
@@ -191,7 +187,6 @@ fun Timetable(
     val cellW = layout.cellWidth(zoom)
     val cellH = layout.cellHeight(zoom)
 
-    // 手势闭包不能读重组时的旧值：布局、周次、编辑态、设置与回调都通过 rememberUpdatedState 取最新。
     val layoutNow by rememberUpdatedState(layout)
     val weekNow by rememberUpdatedState(week)
     val editNow by rememberUpdatedState(editMode)
@@ -204,7 +199,6 @@ fun Timetable(
     val gestureJob = remember { JobSlot() }
     val velocityTracker = remember { VelocityTracker() }
 
-    // 视口或周次结构变化后把偏移收敛回合法范围，避免旋转/改作息后停在空白处。
     LaunchedEffect(layout) {
         grid.clampInto(layout)
     }
@@ -216,7 +210,6 @@ fun Timetable(
         slide.animateTo(0f, tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing))
     }
 
-    // 长按进入排课编辑：按下时挂起计时，手指一动即取消。
     LaunchedEffect(longPressArmed) {
         if (!longPressArmed || editMode) return@LaunchedEffect
         kotlinx.coroutines.delay(android.view.ViewConfiguration.getLongPressTimeout().toLong())
@@ -230,7 +223,6 @@ fun Timetable(
     BackHandler(enabled = editMode) { onEditMode(false) }
     LaunchedEffect(editMode) { if (!editMode) { dragging = null; dragSpot = null; columnFrom = 0; rowFrom = 0 } }
 
-    /** 把缩放动画到目标档位，并让 (anchorX, anchorY) 处的内容保持不动。 */
     suspend fun animateZoomTo(target: Float, anchorX: Float, anchorY: Float) {
         val bounds = layoutNow
         val z0 = grid.zoom
@@ -252,7 +244,6 @@ fun Timetable(
         grid.clampInto(bounds)
     }
 
-    /** 单轴收尾：越界先弹回边界，否则按速度做惯性滑动并停在边界。 */
     suspend fun settleAxis(
         start: Float,
         velocity: Float,
@@ -294,7 +285,6 @@ fun Timetable(
         }
     }
 
-    /** 编辑模式下这些位置由子手势接管整列/整行/单卡拖动，父级不要再抢来平移。 */
     fun editableZoneAt(x: Float, y: Float): Boolean {
         val bounds = layoutNow
         if (x < bounds.gutterPx + 2f || y < bounds.headerPx + 2f) return true
@@ -390,9 +380,7 @@ fun Timetable(
                     .pointerInput(Unit) {
                         val touchSlop = viewConfiguration.touchSlop
                         val doubleTapMillis = viewConfiguration.doubleTapTimeoutMillis
-                        // 取消长按的抖动阈值必须远小于滚动斜率：
-                        // 否则「慢慢拖」在手指还没越过 touchSlop（约 24px）时就已经超时，
-                        // 于是慢速滚动会误进「排课编辑」。实测已复现，这里改用 4dp 作为长期手势的安全边界。
+
                         val longPressCancelSlop = with(density) { 4.dp.toPx() }
                         var lastTapUptime = 0L
                         var lastTapAt = Offset.Zero
@@ -401,7 +389,7 @@ fun Timetable(
                             gestureJob.cancel()
                             velocityTracker.resetTracking()
                             velocityTracker.addPosition(down.uptimeMillis, down.position)
-                            // 交给组合侧计时器判长按；手指一动就取消。
+
                             longPressArmed = !editMode
 
                             var pinched = false
@@ -442,7 +430,7 @@ fun Timetable(
                                                 grid.offsetY, ay, ratio, bounds.availH, bounds.contentHeight(next),
                                             )
                                             grid.zoom = next
-                                            // 只在跨过档位那一刻震一次，不是每帧都震。
+
                                             val rung = nearestZoomRung(next)
                                             if (rung != lastRung) {
                                                 lastRung = rung
@@ -463,16 +451,13 @@ fun Timetable(
                                     continue
                                 }
 
-                                // 双指松成单指：这一轮手势到此为止。
-                                // 否则剩下那根手指会拿「第一根手指按下的位置」当过零点，内容会猛跳一下。
                                 if (pinched) break
 
-                                // 单指：先过触摸斜率，再锁定轴向，避免斜拖时翻周与滚动互相打架。
                                 val tracked = event.changes.firstOrNull { it.id == primaryId } ?: event.changes.first()
                                 val delta = tracked.position - down.position
                                 if (!started) {
                                     travelled = delta.getDistance()
-                                    // 手指一动就取消长按计时（4dp 的小抖动阈值仍算「按住」）。
+
                                     if (travelled > longPressCancelSlop) longPressArmed = false
                                     if (travelled < touchSlop) {
                                         velocityTracker.addPosition(tracked.uptimeMillis, tracked.position)
@@ -489,7 +474,7 @@ fun Timetable(
                                 pulledDown += -pan.y
                                 if (pan != Offset.Zero) {
                                     val maxXnow = bounds.maxOffsetX(grid.zoom)
-                                    // 放大到需要横向滚动时，横拖是平移内容；否则留给翻周。
+
                                     if (maxXnow > 0f) {
                                         grid.offsetX = rubberOffset(
                                             grid.offsetX - pan.x, bounds.availW, bounds.contentWidth(grid.zoom),
@@ -504,14 +489,9 @@ fun Timetable(
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
 
-                            // 手势结束时如果长按计时还挂着，说明只是一次轻点/拖拽，撤掉它。
                             longPressArmed = false
                             if (consumedByChild) return@awaitEachGesture
 
-                            // 双击判定必须在手势收尾时做：轻点根本不过 touchSlop，
-                            // 提前在「started 之后」算的话永远拿不到 isDoubleTap（实测双击失效）。
-                            // 本次手势必须是「原地轻点」才算，带位移的拖拽一律不算，
-                            // 否则拖一下再点一下会误触发缩放（实测曾误开周次面板）。
                             if (!pinched && !editNow && !started &&
                                 lastTapUptime != 0L &&
                                 down.uptimeMillis - lastTapUptime <= doubleTapMillis &&
@@ -556,7 +536,7 @@ fun Timetable(
                             if (started || pinched) {
                                 settle(Offset(velocity.x, velocity.y), pinched, lastCentroid)
                                 lastTapUptime = 0L
-                            } else {                                // 就地轻点（没过斜率、没长按）：记下来，下一次点击可能凑成双击。
+                            } else {
                                 lastTapUptime = lastUptime
                                 lastTapAt = down.position
                             }
@@ -621,8 +601,7 @@ fun Timetable(
                                     val periodSize = (gutterDp / 5.2f).coerceIn(8f, 12f).sp
                                     val clockSize = (gutterDp / 8.2f).coerceIn(6f, 9f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        // 连续节次（1-2、3-4…）只在该段首行标开始时间、
-                                        // 末行标结束时间，中间行不再重复；参照时光课表。
+
                                         Text(
                                             pr.period.toString(),
                                             style = MaterialTheme.typography.labelMedium,
@@ -640,7 +619,7 @@ fun Timetable(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
                                             }
-                                            // 段末才标结束时刻；单节自成一段时首末同行，两个都标。
+
                                             if (isBlockEnd) {
                                                 Text(
                                                     clock(pr.endMinutes),
@@ -657,13 +636,6 @@ fun Timetable(
                     }
                     Column(Modifier.weight(1f)) {
 
-                        // 表头与网格都必须「按内容宽度排布」再整体平移。
-                        // 三个坑（都实测过）：
-                        // 1) 给 Row 加 fillMaxSize()：父级只给视口宽度，放大后 7 列被压到 0；
-                        // 2) 只给 Row 设 requiredWidth：dp→px 取整后 Row 比 7×cell 窄几像素；
-                        // 3) 每格用 width(cellW.toDp())：cellW 是 Float，每格取整误差累积，
-                        //    实测直接少掉一整列（cell bg 只到 x=851，右边全是空白）。
-                        // 所以先把 cellW 取整成整数像素，再转 dp —— 这样 dp→px 回来精确等于该整数。
                         val cellWpx = cellW.roundToInt().coerceAtLeast(1)
                         val cellDp = with(density) { cellWpx.toDp() }
                         val contentW = with(density) { (cellWpx * dayCount).toDp() }
@@ -724,9 +696,7 @@ fun Timetable(
                             }
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
-                            // 不用 Row 排版：放大后 Row 的测量/裁剪组合会在内容中段截断
-                            // （实测 rowW 与内容宽都是 1365、translationX 也正确，但只有 ~690px 可见）。
-                            // 改成每天一个绝对定位的 Box，位置完全由像素算出来，不依赖测量结果。
+
                             projection.days.forEachIndexed { dayIndex, day ->
                                 Box(
                                     Modifier
@@ -813,7 +783,7 @@ fun Timetable(
                                                 "end" -> Alignment.End
                                                 else -> Alignment.Start
                                             }
-                                            // 居中档是上下左右都居中；靠左/靠右仍从格子上沿起排。
+
                                             val alignV = if (s.cellTextAlign == "center") Alignment.CenterVertically
                                             else Alignment.Top
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
@@ -881,9 +851,7 @@ fun Timetable(
                 }
             }
         }
-    // 搜索定位到某节课：先放大一档，再把它滚到视口中间。
-    // 两步必须在同一个协程里顺序执行：JobSlot 只保留最后一个任务，
-    // 分开 launch 会让定位动画把缩放动画取消掉，结果只居中了、没放大。
+
     LaunchedEffect(locatedCourseId, week, layout) {
         val id = locatedCourseId ?: return@LaunchedEffect
         if (boxW == 0 || viewportH == 0) return@LaunchedEffect

@@ -4,7 +4,6 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDate
 
-                                                                                      
 class BackupCodecTest {
     private fun sample() = AppData(
         AppSettings(start = LocalDate.of(2026, 2, 23), end = LocalDate.of(2026, 7, 12)),

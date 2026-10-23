@@ -37,11 +37,6 @@ private class GlassBackdrop(val layer: GraphicsLayer) {
 
 private val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
 
-   
-                                                                                            
-                                                                                                  
-                                                                              
-   
 @Composable
 fun GlassHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val layer = rememberGraphicsLayer()
@@ -51,7 +46,6 @@ fun GlassHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     }
 }
 
-                                                                                               
 @Composable
 fun Modifier.glassSource(): Modifier {
     val backdrop = LocalGlassBackdrop.current ?: return this
@@ -61,13 +55,6 @@ fun Modifier.glassSource(): Modifier {
         drawLayer(backdrop.layer)
     }
 }
-
-   
-                                                                                             
-                                                                                                   
-                                                                                               
-   
-
 
 @Composable
 internal fun Modifier.softGlass(
@@ -103,7 +90,7 @@ internal fun Modifier.liquidGlass(radiusDp: Float, tint: Color, fallback: Color)
         ) {
             runCatching {
                 val offset = source.localPositionOf(target)
-                
+
                 val margin = 24.dp.toPx()
                 layer.renderEffect = lens.effect(size.width, size.height, radiusDp.dp.toPx(), margin)
                 layer.record(size = IntSize(
@@ -130,7 +117,6 @@ private class AndroidLens {
 
     fun effect(width: Float, height: Float, radius: Float, margin: Float): androidx.compose.ui.graphics.RenderEffect {
 
-
         val key = (((width * 4).toLong() and 0xFFFF) shl 48) or
             (((height * 4).toLong() and 0xFFFF) shl 32) or
             (((radius * 4).toLong() and 0xFFFF) shl 16) or
@@ -155,12 +141,6 @@ private class AndroidLens {
         return effect
     }
 }
-
-
-
-
-
-
 
 private const val BlurRadius = 16f
 private const val DepthRatio = 0.34f

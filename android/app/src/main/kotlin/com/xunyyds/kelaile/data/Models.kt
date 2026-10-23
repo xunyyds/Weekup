@@ -2,25 +2,19 @@ package com.xunyyds.kelaile.data
 
 import java.time.LocalDate
 
-                                                                                               
 data class PeriodTime(val period: Int, val startMinutes: Int, val endMinutes: Int) {
     init {
         require(period in 1..100 && startMinutes in 0..1439 && endMinutes in 1..1440 && startMinutes < endMinutes) { "无效的节次时间" }
     }
 }
 
-
-
 const val DEFAULT_PERIOD_COUNT = 20
 
 fun defaultDayPeriods(): List<PeriodTime> = resizePeriods(emptyList(), DEFAULT_PERIOD_COUNT)
 
-
-
 fun resizePeriods(periods: List<PeriodTime>, count: Int): List<PeriodTime> {
     require(count in 1..100) { "每日节数须在 1–100 之间" }
     if (periods.isEmpty()) {
-
 
         return (0 until count).map { i ->
             val start = 480 + i * 45
@@ -39,7 +33,6 @@ fun resizePeriods(periods: List<PeriodTime>, count: Int): List<PeriodTime> {
     return result
 }
 
-                                                                                    
 data class AppSettings(
     val school: String = "",
     val schoolUrl: String = "",
@@ -64,7 +57,6 @@ data class AppSettings(
     val motionSpeed: Double = 1.0,
     val reduceMotion: Boolean = false,
     val transitionStyle: String = "shared",
-
 
     val autoHideBars: Boolean = false,
 ) {
@@ -128,7 +120,6 @@ data class SchoolImport(
 fun adjustPeriods(periods: List<PeriodTime>, index: Int, start: Int, end: Int, cascade: Boolean = true): List<PeriodTime> {
     require(index in periods.indices)
     val delta = end - periods[index].endMinutes
-
 
     if (cascade && delta > 0) {
         require(periods.last().endMinutes + delta <= 1440) { "顺延后最后一节会超出当天，请先缩短其它节次" }

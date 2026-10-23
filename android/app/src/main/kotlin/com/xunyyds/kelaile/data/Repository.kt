@@ -5,10 +5,6 @@ import android.util.AtomicFile
 import java.io.File
 import java.io.IOException
 
-                                                                                                         
-                                                                                          
-                                                                                           
-   
 class Repository internal constructor(
     private val directory: File,
     private val legacy: File,
@@ -29,14 +25,13 @@ class Repository internal constructor(
     }
 
     fun save(data: AppData) = synchronized(lock) {
-        
+
         val bytes = BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
         if (nativeExists()) readNative() else if (legacy.exists()) decodeFile(legacy)
         check(directory.isDirectory || directory.mkdirs()) { "无法创建数据目录" }
         storage.write(bytes)
     }
 
-                                                                                                       
     fun restore(data: AppData) = synchronized(lock) {
         val bytes = BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
         check(directory.isDirectory || directory.mkdirs()) { "无法创建数据目录" }
@@ -45,7 +40,7 @@ class Repository internal constructor(
                 File(directory, "课表-recovery-${System.currentTimeMillis()}.json").outputStream().use { output -> input.copyTo(output) }
             }
         }
-        
+
         storage.write(bytes)
     }
 
@@ -70,7 +65,6 @@ class Repository internal constructor(
     companion object { private val lock = Any() }
 }
 
-                                                                                                    
 internal interface AtomicStorage {
     fun exists(): Boolean
     fun openRead(): java.io.InputStream

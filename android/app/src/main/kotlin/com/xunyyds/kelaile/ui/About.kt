@@ -24,9 +24,7 @@ import com.xunyyds.kelaile.core.platform.AppMetadata
 import com.xunyyds.kelaile.core.platform.AppPlatform
 import kotlinx.coroutines.launch
 
-
 class ApkShareProvider : FileProvider()
-
 
 fun shareInstalledApk(context: Context) = ApkSharing.shareInstalledApk(context)
 
