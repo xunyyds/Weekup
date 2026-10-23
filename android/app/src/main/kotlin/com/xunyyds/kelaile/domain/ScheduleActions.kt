@@ -8,6 +8,11 @@ object ScheduleActions {
         colors=data.colors+(course.id to color),
     )
     fun deleteCourse(data:AppData,id:String):AppData=data.copy(courses=data.courses.filterNot { it.id==id },colors=data.colors-id)
+
+    /** 只更新备注，保留课程其余字段与颜色。 */
+    fun setNote(data: AppData, id: String, note: String): AppData = data.copy(
+        courses = data.courses.map { if (it.id == id) it.copy(note = note.take(NOTE_MAX)) else it },
+    )
     fun importSchool(data:AppData,imported:SchoolImport):AppData {
         require(imported.courses.isNotEmpty()) { "没有可导入的课程" }
         val count=maxOf(imported.weekCount ?: data.settings.weekCount,imported.courses.maxOf { it.weeks.max() })

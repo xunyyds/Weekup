@@ -35,6 +35,19 @@ fun CourseEditor(course: CourseSession?, settings: AppSettings, initialColor: Lo
     var selectedColor by rememberSaveable(course?.id, initialColor) { mutableStateOf(initialColor and 0xffffffffL) }
     var showColorPicker by rememberSaveable(course?.id) { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmLeave by remember { mutableStateOf(false) }
+    val initialWeeks = course?.weeks?.joinToString(",").orEmpty()
+    val dirty = name != course?.name.orEmpty() ||
+        teacher != course?.teacher.orEmpty() ||
+        location != course?.location.orEmpty() ||
+        weekday != (course?.weekday ?: 1) ||
+        start != (course?.startPeriod ?: availablePeriods.firstOrNull() ?: 1) ||
+        end != (course?.endPeriod ?: availablePeriods.firstOrNull() ?: 1) ||
+        weeks != initialWeeks ||
+        selectedColor != (initialColor and 0xffffffffL)
+    fun requestBack() {
+        if (dirty) confirmLeave = true else onBack()
+    }
     fun save() {
         val result = runCatching {
             require(name.isNotBlank()) { "请输入课程名" }
@@ -58,9 +71,9 @@ fun CourseEditor(course: CourseSession?, settings: AppSettings, initialColor: Lo
         result.onSuccess { (value, color) -> error = null; onSave(value, color) }
             .onFailure { error = it.message ?: "请输入有效的课程信息" }
     }
-    BackHandler(onBack = onBack)
+    BackHandler(onBack = ::requestBack)
     Column(Modifier.fillMaxSize().imePadding()) {
-        EditorHeader(if (course == null) "新增课程" else "编辑课程", onBack, ::save)
+        EditorHeader(if (course == null) "新增课程" else "编辑课程", ::requestBack, ::save)
         error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EditorField("课程名", name, { name = it })
@@ -116,6 +129,18 @@ fun CourseEditor(course: CourseSession?, settings: AppSettings, initialColor: Lo
         selectedColor = it
         showColorPicker = false
     }
+    if (confirmLeave) AlertDialog(
+        onDismissRequest = { confirmLeave = false },
+        title = { Text("还有未保存的修改") },
+        text = { Text("保存后退出，或放弃本次修改。") },
+        confirmButton = { TextButton(onClick = { confirmLeave = false; save() }) { Text("保存并退出") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { confirmLeave = false; onBack() }) { Text("放弃修改") }
+                TextButton(onClick = { confirmLeave = false }) { Text("继续编辑") }
+            }
+        },
+    )
 }
 
 @Composable
