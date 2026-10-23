@@ -53,7 +53,7 @@ private val dayNames = listOf("星期一", "星期二", "星期三", "星期四"
 
 private val gridCellShape = androidx.compose.ui.graphics.RectangleShape
 
-private val gutterWidth = 54.dp
+private val gutterWidth = 42.dp
 
 private val dayHeaderHeight = 38.dp
 
@@ -159,7 +159,6 @@ fun Timetable(
     }
 
     var longPressArmed by remember { mutableStateOf(false) }
-
     val gutterPx = with(density) { gutterWidth.toPx() }
     val headerPx = with(density) { dayHeaderHeight.toPx() }
     val week = viewWeek.coerceIn(1, s.weekCount)
@@ -233,8 +232,21 @@ fun Timetable(
         }
         val x0 = grid.offsetX
         val y0 = grid.offsetY
-        animate(0f, 1f, animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)) { t, _ ->
-            val z = z0 + (target - z0) * t
+        val distance = abs(target - z0)
+        val spec = if (distance < 0.12f) {
+            spring<Float>(dampingRatio = 0.9f, stiffness = 400f)
+        } else {
+            spring<Float>(dampingRatio = 0.82f, stiffness = 220f)
+        }
+        animate(0f, 1f, animationSpec = spec) { t, _ ->
+            if (t >= 1f) {
+                grid.zoom = target
+                grid.offsetX = anchoredOffset(x0, anchorX, target / z0, bounds.availW, bounds.contentWidth(target))
+                grid.offsetY = anchoredOffset(y0, anchorY, target / z0, bounds.availH, bounds.contentHeight(target))
+                return@animate
+            }
+            val eased = t
+            val z = z0 + (target - z0) * eased
             val ratio = z / z0
             grid.zoom = z
             grid.offsetX = anchoredOffset(x0, anchorX, ratio, bounds.availW, bounds.contentWidth(z))
@@ -418,7 +430,8 @@ fun Timetable(
                                     pinched = true
                                     if (zoomChange != 1f && zoomChange.isFinite()) {
                                         val z0 = grid.zoom
-                                        val next = (z0 * zoomChange).coerceIn(GRID_MIN_ZOOM, GRID_MAX_ZOOM)
+                                        val raw = z0 * zoomChange
+                                        val next = rubberZoom(raw)
                                         if (next != z0) {
                                             val ratio = next / z0
                                             val ax = ((centroid.x - bounds.gutterPx)).coerceIn(0f, bounds.availW)
@@ -598,8 +611,8 @@ fun Timetable(
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
                                     val gutterDp = with(density) { cellH.toDp().value }
-                                    val periodSize = (gutterDp / 5.2f).coerceIn(8f, 12f).sp
-                                    val clockSize = (gutterDp / 8.2f).coerceIn(6f, 9f).sp
+                                    val periodSize = (gutterDp / 5.6f).coerceIn(9f, 12f).sp
+                                    val clockSize = (gutterDp / 9.2f).coerceIn(7f, 9f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                                         Text(
@@ -639,7 +652,6 @@ fun Timetable(
                         val cellWpx = cellW.roundToInt().coerceAtLeast(1)
                         val cellDp = with(density) { cellWpx.toDp() }
                         val contentW = with(density) { (cellWpx * dayCount).toDp() }
-                        android.util.Log.d("KW", "zoom=${"%.3f".format(grid.zoom)} off=${grid.offsetX} availW=$availW cellWpx=$cellWpx dayCount=$dayCount contentPx=${cellWpx*dayCount} contentWdp=$contentW cellDp=$cellDp density=${density.density}")
                         Box(Modifier.fillMaxWidth().height(dayHeaderHeight).clipToBounds()) {
                             projection.days.forEachIndexed { dayIndex, day ->
                                 val date = WeekDates.on(s.start, week, day)
@@ -904,8 +916,18 @@ private fun WeekPickerSheet(
         initialFirstVisibleItemIndex = (viewWeek - 2).coerceAtLeast(0),
     )
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(
+                settings.gradeLabel.ifBlank { "选择周次" },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+        }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {

@@ -234,6 +234,7 @@ fun SharedTransitionScope.SettingsPage(data:AppData,scroll:ScrollState,route:Str
                 }
                 Route.Semester -> Section("学期与课表") {
                     SettingsItem("学校名称",s.school.ifBlank { "导入时自动识别，失败后再填写" }) { text("学校名称",s.school) { update { s.copy(school=it.trim()) } } }
+                    SettingsItem("课表标题",s.gradeLabel.ifBlank { "选择周次" }) { text("课表标题",s.gradeLabel) { update { s.copy(gradeLabel=it.trim().take(12)) } } }
                     SettingsItem("学期日期","${s.start} — ${s.end}") { onRoute(Route.Calendar.key) }
                     SettingsItem("周次与星期","第 ${s.currentWeek} 周 / 共 ${s.weekCount} 周") { onRoute(Route.Week.key) }
                     SettingsItem("每日节数","${s.periods.size} 节") {

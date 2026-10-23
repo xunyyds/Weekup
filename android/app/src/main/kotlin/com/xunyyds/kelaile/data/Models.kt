@@ -59,6 +59,7 @@ data class AppSettings(
     val transitionStyle: String = "shared",
 
     val autoHideBars: Boolean = false,
+    val gradeLabel: String = "大一",
 ) {
     init {
         require(firstDay in 1..7 && lastDay in firstDay..7 && weekStart in 1..7)
@@ -70,6 +71,7 @@ data class AppSettings(
         require(themePalette in listOf("blue", "green", "purple", "orange", "rose", "teal"))
         require(navigationStyle in listOf("default", "floating", "liquid"))
         require(cellTextAlign in listOf("start", "center", "end"))
+        require(gradeLabel.length <= 12 && gradeLabel.none { it == '\n' || it == '\r' }) { "标题最多 12 个字且不能换行" }
         require(!end.isBefore(start) && reminderMinutes in 0..10080 && defaultColor in 0..0xffffffffL)
         require(periods.isNotEmpty() && periods.map { it.period }.distinct().size == periods.size)
         val ordered = periods.sortedBy { it.period }

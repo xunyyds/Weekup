@@ -138,6 +138,26 @@ internal fun anchoredOffset(
     content: Float,
 ): Float = clampOffset((offset + anchor) * ratio - anchor, viewport, content)
 
+/**
+ * 缩放越界的橡皮筋：捏到最大/最小档还想继续捏时只允许超出一点点。
+ *
+ * 原来直接 `coerceIn`，捏合在最档位处"硬碰硬"停住，手感像卡住；
+ * 给它一点弹性余量，松手后由档位吸附动画收回。
+ */
+internal fun rubberZoom(
+    raw: Float,
+    min: Float = GRID_MIN_ZOOM,
+    max: Float = GRID_MAX_ZOOM,
+    factor: Float = GRID_RUBBER,
+): Float {
+    if (!raw.isFinite()) return min
+    return when {
+        raw < min -> min - (min - raw) * factor
+        raw > max -> max + (raw - max) * factor
+        else -> raw
+    }
+}
+
 internal class JobSlot {
     private var job: Job? = null
 

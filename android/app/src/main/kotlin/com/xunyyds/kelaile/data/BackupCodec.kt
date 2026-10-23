@@ -19,6 +19,7 @@ object BackupCodec {
             put("firstDay", s.firstDay); put("lastDay", s.lastDay); put("weekStart", s.weekStart)
             put("currentWeek", s.currentWeek); put("weekCount", s.weekCount)
             put("defaultColor", s.defaultColor); put("reminderMinutes", s.reminderMinutes); put("reminders", s.reminders)
+            put("gradeLabel", s.gradeLabel)
             put("start", "${s.start}T00:00:00.000"); put("end", "${s.end}T00:00:00.000")
             put("periods", JSONArray().apply { s.periods.forEach { p -> put(JSONObject().put("period", p.period).put("startMinutes", p.startMinutes).put("endMinutes", p.endMinutes)) } })
         }
@@ -63,6 +64,7 @@ object BackupCodec {
                 reduceMotion = if(j.has("reduceMotion")) (j.get("reduceMotion") as? Boolean ?: error("reduceMotion 必须为布尔值")) else false,
                 transitionStyle = j.string("transitionStyle", defaults.transitionStyle),
             autoHideBars = if(j.has("autoHideBars")) (j.get("autoHideBars") as? Boolean ?: error("autoHideBars 必须为布尔值")) else false,
+                gradeLabel = j.string("gradeLabel", defaults.gradeLabel).take(12),
                 themePalette = j.string("themePalette", defaults.themePalette),
                 dynamicColor = if (j.has("dynamicColor")) (j.get("dynamicColor") as? Boolean ?: error("dynamicColor 必须为布尔值")) else defaults.dynamicColor,
             )

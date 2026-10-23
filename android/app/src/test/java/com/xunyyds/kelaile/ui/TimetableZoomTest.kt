@@ -144,6 +144,24 @@ class TimetableZoomTest {
     }
 
     @Test
+    fun rubberZoomOnlyGivesWayBeyondTheLimits() {
+        assertEquals(1.5f, rubberZoom(1.5f), 1e-4f)
+        assertEquals(GRID_MIN_ZOOM, rubberZoom(GRID_MIN_ZOOM), 1e-4f)
+        assertEquals(GRID_MAX_ZOOM, rubberZoom(GRID_MAX_ZOOM), 1e-4f)
+
+        val over = rubberZoom(GRID_MAX_ZOOM + 1f)
+        assertEquals(GRID_MAX_ZOOM + 0.32f, over, 1e-3f)
+        assertTrue("越界量必须远小于手指实际幅度", over < GRID_MAX_ZOOM + 0.5f)
+
+        val under = rubberZoom(GRID_MIN_ZOOM - 1f)
+        assertEquals(GRID_MIN_ZOOM - 0.32f, under, 1e-3f)
+        assertTrue(under > 0f)
+
+        assertEquals(GRID_MIN_ZOOM, rubberZoom(Float.NaN))
+        assertEquals(GRID_MIN_ZOOM, rubberZoom(Float.NEGATIVE_INFINITY))
+    }
+
+    @Test
     fun anchoredOffsetKeepsTheAnchorPointFixed() {
         val viewport = 1080f
         val content0 = 3000f

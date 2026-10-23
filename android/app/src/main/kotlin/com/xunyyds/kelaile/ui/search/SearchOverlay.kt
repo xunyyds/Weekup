@@ -114,11 +114,17 @@ fun SharedTransitionScope.KelaileSearchOverlay(
     val index = remember(data.courses) { SearchIndex.forData(data) }
     val history = remember(context) { SearchHistory(context) }
     var historyItems by remember { mutableStateOf(history.items()) }
+    var historyTimes by remember { mutableStateOf(history.times()) }
+
+    val suggestions = remember(data, historyItems, historyTimes, visible) {
+        SearchSuggestions.suggest(data, historyItems, historyTimes, System.currentTimeMillis())
+    }
 
     fun rememberSearch(raw: String) {
         if (raw.isBlank()) return
         history.add(raw)
         historyItems = history.items()
+        historyTimes = history.times()
     }
 
     fun close() {
@@ -145,6 +151,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
             query.value = ""
             keyboard?.hide()
             historyItems = history.items()
+            historyTimes = history.times()
         }
     }
     BackHandler(enabled = visible) {
@@ -202,7 +209,8 @@ fun SharedTransitionScope.KelaileSearchOverlay(
                 focusRequester = focusRequester,
                 history = history,
                 historyItems = historyItems,
-                onHistoryChange = { historyItems = it },
+                suggestions = suggestions,
+                onHistoryChange = { historyItems = it; historyTimes = history.times() },
                 onPick = { pick(it) },
                 onClose = { close() },
             )
@@ -219,6 +227,7 @@ private fun SearchPane(
     focusRequester: FocusRequester,
     history: SearchHistory,
     historyItems: List<String>,
+    suggestions: List<Suggestion>,
     onHistoryChange: (List<String>) -> Unit,
     onPick: (PaletteEntry) -> Unit,
     onClose: () -> Unit,
@@ -257,6 +266,7 @@ private fun SearchPane(
                 terms = result.terms,
                 highlight = highlight,
                 historyItems = historyItems,
+                suggestions = suggestions,
                 onUseHistory = { query.value = it },
                 onRemoveHistory = {
                     history.remove(it)
@@ -353,6 +363,7 @@ private fun ResultList(
     terms: List<String>,
     highlight: SpanStyle,
     historyItems: List<String>,
+    suggestions: List<Suggestion>,
     onUseHistory: (String) -> Unit,
     onRemoveHistory: (String) -> Unit,
     onClearHistory: () -> Unit,
@@ -368,6 +379,12 @@ private fun ResultList(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (terms.isEmpty()) {
+            if (suggestions.isNotEmpty()) {
+                item(key = "suggest-header") { GroupHeader("建议搜索", 0, showCount = false) }
+                items(suggestions, key = { "sug:" + it.entry.id }) { suggestion ->
+                    SuggestionRow(suggestion) { onPick(suggestion.entry) }
+                }
+            }
             item(key = "recent-header") { GroupHeader("最近搜索", 0, showCount = false) }
             if (historyItems.isEmpty()) {
                 item(key = "recent-empty") {
@@ -391,10 +408,6 @@ private fun ResultList(
                         Text("清空搜索历史")
                     }
                 }
-            }
-            item(key = "actions-header") { GroupHeader("常用动作", 0, showCount = false) }
-            items(paletteActions, key = { "quick:" + it.id }) { entry ->
-                ResultRow(entry, terms, highlight) { onPick(entry) }
             }
         } else if (entries.isEmpty()) {
             item(key = "empty") { EmptyState(query, onClear, onClose) }
@@ -467,6 +480,47 @@ private fun ResultRow(entry: PaletteEntry, terms: List<String>, highlight: SpanS
             if (subtitle.text.isNotBlank()) Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionRow(suggestion: Suggestion, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val entry = suggestion.entry
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(KelaileShapes.card))
+            .background(
+                if (pressed) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KindBadge(entry.kind)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            entry.title,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        if (suggestion.reason.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                suggestion.reason,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
