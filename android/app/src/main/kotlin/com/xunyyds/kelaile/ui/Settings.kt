@@ -229,15 +229,15 @@ fun SharedTransitionScope.SettingsPage(
                     when (current) {
                         Route.Root -> {
                             Section("偏好设置") {
-                                SettingsItem("外观", "主题、莫奈取色、底栏、课表配色与显示布局") { onRoute(Route.Appearance.key) }
-                                SettingsItem("显示设置", "格内 @ 与老师、对齐与密度") { onRoute(Route.Display.key) }
-                                SettingsItem("学期与课表", "学期信息、日期、周次与节次时间") { onRoute(Route.Semester.key) }
-                                SettingsItem("课程", "课程管理与默认颜色") { onRoute(Route.Courses.key) }
-                                SettingsItem("上课提醒", "通知权限与提前时间") { onRoute(Route.Reminders.key) }
-                                SettingsItem("数据与备份", "整应用备份恢复、课表导入导出、教务浏览器") { onRoute(Route.Data.key) }
+                                SettingsItem("外观", "主题、莫奈取色、底栏、课表配色与显示布局", KelaileGlyphKind.Palette) { onRoute(Route.Appearance.key) }
+                                SettingsItem("显示设置", "格内 @ 与老师、对齐与密度", KelaileGlyphKind.Monitor) { onRoute(Route.Display.key) }
+                                SettingsItem("学期与课表", "学期信息、日期、周次与节次时间", KelaileGlyphKind.Calendar) { onRoute(Route.Semester.key) }
+                                SettingsItem("课程", "课程管理与默认颜色", KelaileGlyphKind.Book) { onRoute(Route.Courses.key) }
+                                SettingsItem("上课提醒", "通知权限与提前时间", KelaileGlyphKind.Bell) { onRoute(Route.Reminders.key) }
+                                SettingsItem("数据与备份", "整应用备份恢复、课表导入导出、教务浏览器", KelaileGlyphKind.Database) { onRoute(Route.Data.key) }
                             }
                             Section("关于") {
-                                SettingsItem("关于与更新", "版本、更新检测、GitHub 与开源许可") { onRoute(Route.About.key) }
+                                SettingsItem("关于与更新", "版本、更新检测、GitHub 与开源许可", KelaileGlyphKind.Info) { onRoute(Route.About.key) }
                             }
                         }
                         Route.Appearance -> Section("外观") {
@@ -597,8 +597,14 @@ private fun SettingsTarget(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsItem(title: String, subtitle: String = "", onClick: () -> Unit) = SettingsTarget(title) {
-    SettingRow(title, subtitle, onClick)
+private fun SettingsItem(
+    title: String,
+    subtitle: String = "",
+    glyph: KelaileGlyphKind? = null,
+    glyphTint: Color = MaterialTheme.colorScheme.primary,
+    onClick: () -> Unit,
+) = SettingsTarget(title) {
+    SettingRow(title, subtitle, glyph, glyphTint, onClick)
 }
 
 private val paletteNames = linkedMapOf(

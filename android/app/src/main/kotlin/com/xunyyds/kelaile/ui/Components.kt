@@ -170,13 +170,13 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     ) {
         if (title.isNotBlank()) {
             Text(
-                title.uppercase(),
+                title,
                 modifier = Modifier
                     .padding(horizontal = KelaileSpacing.xl + 2.dp)
                     .semantics { heading() },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-                letterSpacing = 0.6.sp,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+                letterSpacing = 0.2.sp,
             )
         }
         Box(
@@ -240,7 +240,13 @@ internal fun SectionRow(alwaysDivider: Boolean = false, content: @Composable () 
 }
 
 @Composable
-fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
+fun SettingRow(
+    title: String,
+    subtitle: String = "",
+    glyph: KelaileGlyphKind? = null,
+    glyphTint: Color = MaterialTheme.colorScheme.primary,
+    onClick: () -> Unit,
+) {
     val haptic = LocalHapticFeedback.current
     val motion = kelaileMotionEnabled()
     val (slot, isFirst) = rememberRowSlot()
@@ -271,6 +277,10 @@ fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
                 .padding(horizontal = 18.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (glyph != null) {
+                SettingIcon(glyph, glyphTint)
+                Spacer(Modifier.width(14.dp))
+            }
             Column(
                 Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -1006,7 +1016,11 @@ fun KelaileRecentList(
     }
 }
 
-enum class KelaileGlyphKind { Search, Close, Back }
+enum class KelaileGlyphKind {
+    Search, Close, Back,
+    Palette, Monitor, Calendar, Book, Bell, Database, Info,
+    Brush, Layout, Speed, Clock, Tag, Image, Link, Check, Plus,
+}
 
 @Composable
 fun KelaileGlyph(
@@ -1031,8 +1045,128 @@ fun KelaileGlyph(
                 drawLine(tint, Offset(14.5f * u, 4.5f * u), Offset(7f * u, 12f * u), pen.width, StrokeCap.Round)
                 drawLine(tint, Offset(7f * u, 12f * u), Offset(14.5f * u, 19.5f * u), pen.width, StrokeCap.Round)
             }
+            KelaileGlyphKind.Palette -> {
+                drawCircle(tint, 8f * u, Offset(12f * u, 12f * u), style = pen)
+                drawCircle(tint, 1.5f * u, Offset(9f * u, 9f * u))
+                drawCircle(tint, 1.5f * u, Offset(15f * u, 9f * u))
+                drawCircle(tint, 1.5f * u, Offset(9.5f * u, 15f * u))
+            }
+            KelaileGlyphKind.Monitor -> {
+                drawRoundRect(tint, Offset(3.5f * u, 5f * u), Size(17f * u, 11f * u), CornerRadius(2f * u), style = pen)
+                drawLine(tint, Offset(12f * u, 16f * u), Offset(12f * u, 20f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(8f * u, 20f * u), Offset(16f * u, 20f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Calendar -> {
+                drawRoundRect(tint, Offset(4f * u, 5.5f * u), Size(16f * u, 14f * u), CornerRadius(2f * u), style = pen)
+                drawLine(tint, Offset(4f * u, 9.5f * u), Offset(20f * u, 9.5f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(8f * u, 3.5f * u), Offset(8f * u, 7f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(16f * u, 3.5f * u), Offset(16f * u, 7f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Book -> {
+                drawRoundRect(tint, Offset(5f * u, 4f * u), Size(14f * u, 16f * u), CornerRadius(1.5f * u), style = pen)
+                drawLine(tint, Offset(9f * u, 4f * u), Offset(9f * u, 20f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Bell -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(7f * u, 16f * u)
+                        cubicTo(7f * u, 8f * u, 9f * u, 5f * u, 12f * u, 5f * u)
+                        cubicTo(15f * u, 5f * u, 17f * u, 8f * u, 17f * u, 16f * u)
+                        close()
+                    },
+                    tint, style = pen,
+                )
+                drawLine(tint, Offset(6f * u, 16f * u), Offset(18f * u, 16f * u), pen.width, StrokeCap.Round)
+                drawCircle(tint, 1.6f * u, Offset(12f * u, 19.5f * u))
+            }
+            KelaileGlyphKind.Database -> {
+                for (y in listOf(6f, 12f, 18f)) {
+                    drawOval(tint, Offset(4f * u, (y - 2.2f) * u), Size(16f * u, 4.4f * u), style = pen)
+                }
+            }
+            KelaileGlyphKind.Info -> {
+                drawCircle(tint, 8f * u, Offset(12f * u, 12f * u), style = pen)
+                drawLine(tint, Offset(12f * u, 11f * u), Offset(12f * u, 16f * u), pen.width, StrokeCap.Round)
+                drawCircle(tint, 1.1f * u, Offset(12f * u, 8f * u))
+            }
+            KelaileGlyphKind.Brush -> {
+                drawLine(tint, Offset(15f * u, 5f * u), Offset(9f * u, 11f * u), pen.width * 2.2f, StrokeCap.Round)
+                drawPath(
+                    Path().apply {
+                        moveTo(9f * u, 11f * u)
+                        cubicTo(6f * u, 14f * u, 6f * u, 18f * u, 5f * u, 19f * u)
+                        cubicTo(8f * u, 19f * u, 10f * u, 17f * u, 11f * u, 13f * u)
+                    },
+                    tint, style = pen,
+                )
+            }
+            KelaileGlyphKind.Layout -> {
+                drawRoundRect(tint, Offset(4f * u, 4f * u), Size(16f * u, 16f * u), CornerRadius(2f * u), style = pen)
+                drawLine(tint, Offset(4f * u, 10f * u), Offset(20f * u, 10f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(12f * u, 10f * u), Offset(12f * u, 20f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Speed -> {
+                drawArc(
+                    tint, 150f, 240f, useCenter = false,
+                    topLeft = Offset(4f * u, 5f * u), size = Size(16f * u, 16f * u),
+                    style = pen,
+                )
+                drawLine(tint, Offset(12f * u, 13f * u), Offset(16f * u, 9f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Clock -> {
+                drawCircle(tint, 8f * u, Offset(12f * u, 12f * u), style = pen)
+                drawLine(tint, Offset(12f * u, 12f * u), Offset(12f * u, 7.5f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(12f * u, 12f * u), Offset(15.5f * u, 13.5f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Tag -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(4f * u, 4f * u); lineTo(12f * u, 4f * u); lineTo(20f * u, 12f * u)
+                        lineTo(12f * u, 20f * u); lineTo(4f * u, 12f * u); close()
+                    },
+                    tint, style = pen,
+                )
+                drawCircle(tint, 1.4f * u, Offset(8f * u, 8f * u))
+            }
+            KelaileGlyphKind.Image -> {
+                drawRoundRect(tint, Offset(4f * u, 5f * u), Size(16f * u, 14f * u), CornerRadius(2f * u), style = pen)
+                drawCircle(tint, 1.8f * u, Offset(9f * u, 10f * u))
+                drawPath(
+                    Path().apply {
+                        moveTo(5f * u, 18f * u); lineTo(10f * u, 13f * u); lineTo(14f * u, 16f * u); lineTo(17f * u, 13f * u); lineTo(19f * u, 15f * u)
+                    },
+                    tint, style = pen,
+                )
+            }
+            KelaileGlyphKind.Link -> {
+                drawLine(tint, Offset(9f * u, 15f * u), Offset(15f * u, 9f * u), pen.width, StrokeCap.Round)
+                drawArc(tint, 90f, 180f, useCenter = false, topLeft = Offset(4f * u, 8f * u), size = Size(8f * u, 8f * u), style = pen)
+                drawArc(tint, 270f, 180f, useCenter = false, topLeft = Offset(12f * u, 8f * u), size = Size(8f * u, 8f * u), style = pen)
+            }
+            KelaileGlyphKind.Check -> {
+                drawLine(tint, Offset(5f * u, 12.5f * u), Offset(10f * u, 17.5f * u), pen.width * 1.3f, StrokeCap.Round)
+                drawLine(tint, Offset(10f * u, 17.5f * u), Offset(19f * u, 6.5f * u), pen.width * 1.3f, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Plus -> {
+                drawLine(tint, Offset(12f * u, 5f * u), Offset(12f * u, 19f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(5f * u, 12f * u), Offset(19f * u, 12f * u), pen.width, StrokeCap.Round)
+            }
         }
     }
+}
+
+/**
+ * 条目左侧的圆角图标块：底色是 tint 的淡色，字形用 tint 本身，与图三那种分组列表一致。
+ */
+@Composable
+fun SettingIcon(kind: KelaileGlyphKind, tint: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(tint.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center,
+    ) { KelaileGlyph(kind, tint, size = 20.dp) }
 }
 
 /**
