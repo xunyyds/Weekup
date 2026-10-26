@@ -77,94 +77,125 @@ fun UpdateDialog(
     }
 
     if (confirmCancel) {
-        AlertDialog(
-            onDismissRequest = { confirmCancel = false },
-            title = { Text("取消下载？") },
-            text = { Text("已下载的部分会被删除，下次需要重新开始下载。") },
-            confirmButton = {
-                TextButton(onClick = { confirmCancel = false; onCancelDownload() }) { Text("取消下载") }
+        com.xunyyds.kelaile.ui.GlassDialogScaffold(
+            onDismiss = { confirmCancel = false },
+            title = {
+                Text(
+                    "取消下载？",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
             },
-            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("继续下载") } },
+            text = {
+                Text(
+                    "已下载的部分会被删除，下次需要重新开始下载。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                com.xunyyds.kelaile.ui.GlassPillButton(
+                    "取消下载",
+                    onClick = { confirmCancel = false; onCancelDownload() },
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmCancel = false }) { Text("继续下载") }
+            },
         )
     }
 
-    AlertDialog(
-        onDismissRequest = { if (!forced) dismissRequest() },
-        title = {
-            Text(
-                text = when (stage) {
-                    UpdateStage.Failed -> "更新失败"
-                    else -> "发现新版本"
-                },
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-        },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                VersionSummary(info = info, asset = asset, currentVersion = currentVersion)
-                if (forced) {
-                    Spacer(Modifier.height(10.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
+    com.xunyyds.kelaile.ui.GlassDialogScaffold(
+            onDismiss = { if (!forced) dismissRequest() },
+            dismissOnBackPress = !forced,
+            title = {
+                Text(
+                    text = when (stage) {
+                        UpdateStage.Failed -> "更新失败"
+                        else -> "发现新版本"
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    VersionSummary(info = info, asset = asset, currentVersion = currentVersion)
+                    if (forced) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                "此版本必须更新后才能继续使用。",
+                                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("更新日志", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    if (info.body.isBlank()) {
                         Text(
-                            "此版本必须更新后才能继续使用。",
-                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            "本次更新没有提供说明。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        MarkdownText(
+                            markdown = info.body,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
+                        )
+                    }
+                    if (stage != UpdateStage.Available) {
+                        Spacer(Modifier.height(14.dp))
+                        ProgressSection(
+                            stage = stage,
+                            progress = progress,
+                            stageLabel = stageLabel,
+                            error = error,
                         )
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("更新日志", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
-                if (info.body.isBlank()) {
-                    Text("本次更新没有提供说明。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    MarkdownText(
-                        markdown = info.body,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-                    )
+            },
+            confirmButton = {
+                when (stage) {
+                    UpdateStage.Available -> com.xunyyds.kelaile.ui.GlassPillButton("立即更新", onClick = onUpdate)
+                    UpdateStage.Downloading -> com.xunyyds.kelaile.ui.GlassPillButton("取消下载", onClick = { confirmCancel = true })
+                    UpdateStage.Ready -> com.xunyyds.kelaile.ui.GlassPillButton("安装", onClick = onInstall)
+                    UpdateStage.Failed -> com.xunyyds.kelaile.ui.GlassPillButton("重试", onClick = onRetry)
                 }
-                if (stage != UpdateStage.Available) {
-                    Spacer(Modifier.height(14.dp))
-                    ProgressSection(
-                        stage = stage,
-                        progress = progress,
-                        stageLabel = stageLabel,
-                        error = error,
-                    )
+            },
+            dismissButton = {
+                val skip: (() -> Unit)? = when (stage) {
+                    UpdateStage.Available -> if (forced) null else onSkipVersion
+                    UpdateStage.Downloading -> if (forced) null else onDismiss
+                    UpdateStage.Ready -> if (forced) null else onDismiss
+                    UpdateStage.Failed -> null
                 }
-            }
-        },
-        confirmButton = {
-            when (stage) {
-                UpdateStage.Available -> Button(onClick = onUpdate) { Text("立即更新") }
-                UpdateStage.Downloading -> OutlinedButton(onClick = { confirmCancel = true }) { Text("取消下载") }
-                UpdateStage.Ready -> Button(onClick = onInstall) { Text("安装") }
-                UpdateStage.Failed -> Button(onClick = onRetry) { Text("重试") }
-            }
-        },
-        dismissButton = {
-            when (stage) {
-                UpdateStage.Available -> if (!forced) {
-                    TextButton(onClick = onSkipVersion) { Text("此版本不再提示") }
-                } else null
-                UpdateStage.Downloading -> if (forced) null else TextButton(onClick = onDismiss) { Text("后台下载") }
-                UpdateStage.Ready -> if (!forced) TextButton(onClick = onDismiss) { Text("稍后安装") } else null
-                UpdateStage.Failed -> if (!forced) {
+                if (stage == UpdateStage.Failed) {
                     Row {
                         TextButton(onClick = onOpenReleasePage) { Text("手动下载") }
-                        TextButton(onClick = onDismiss) { Text("关闭") }
+                        if (!forced) TextButton(onClick = onDismiss) { Text("关闭") }
                     }
-                } else TextButton(onClick = onOpenReleasePage) { Text("手动下载") }
-            }
-        },
+                } else if (skip != null) {
+                    TextButton(onClick = skip) { Text(stage.dismissLabel) }
+                }
+            },
     )
 }
+
+private val UpdateStage.dismissLabel: String
+    get() = when (this) {
+        UpdateStage.Available -> "此版本不再提示"
+        UpdateStage.Downloading -> "后台下载"
+        UpdateStage.Ready -> "稍后安装"
+        UpdateStage.Failed -> "关闭"
+    }
 
 @Composable
 private fun VersionSummary(info: ReleaseInfo, asset: ReleaseAsset?, currentVersion: String) {

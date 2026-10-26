@@ -5,7 +5,7 @@ plugins {
 }
 android {
     namespace = "com.xunyyds.kelaile"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.xunyyds.kelaile"
         minSdk = 26
@@ -61,6 +61,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.webkit:webkit:1.15.0")
     implementation("org.jsoup:jsoup:1.18.3")
+    implementation("io.github.kyant0:backdrop:2.0.1")
+    implementation("io.github.kyant0:shapes:1.2.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20251224")
 }

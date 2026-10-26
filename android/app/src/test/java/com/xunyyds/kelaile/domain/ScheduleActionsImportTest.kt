@@ -72,4 +72,20 @@ class ScheduleActionsImportTest {
         assertEquals(14, result.settings.periods.size)
         assertEquals(2, result.courses.size)
     }
+
+    @Test fun keptLocalPeriodsRenumberContinuously() {
+        val late = local().copy(
+            settings = local().settings.copy(
+                periods = listOf(PeriodTime(21, 1300, 1345), PeriodTime(29, 1350, 1395)),
+            ),
+        )
+        val result = ScheduleActions.importSchool(late, imported())
+        val periods = result.settings.periods.sortedBy { it.startMinutes }
+        assertEquals("导入 10 节 + 其后的本地 2 节", 12, periods.size)
+        assertEquals(
+            "节次编号必须连续：10 之后是 11、12，不能直接跳到 21/29",
+            (1..12).toList(),
+            periods.map { it.period },
+        )
+    }
 }

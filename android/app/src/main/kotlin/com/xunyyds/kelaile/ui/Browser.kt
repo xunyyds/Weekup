@@ -25,15 +25,19 @@ import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.xunyyds.kelaile.data.SchoolImport
 import com.xunyyds.kelaile.data.SchoolParser
+import com.xunyyds.kelaile.ui.glass.glassPanel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,7 +73,6 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     }
     val originalOrientation = remember(activity) { activity?.requestedOrientation }
     val snackbar = remember { SnackbarHostState() }
-    var menuOpen by remember { mutableStateOf(false) }
     var showAddress by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -225,48 +228,28 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
 
         Column(Modifier.fillMaxWidth().animateContentSize()) {
         if (chromeVisible) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = ::back, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("返回", maxLines = 1) }
-            if (!compactToolbar) {
-
-                TextButton(onClick = ::switchViewMode, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text(if (desktopMode) "桌面" else "手机", maxLines = 1)
-                }
-                TextButton(onClick = { webView?.reload() }, enabled = webView != null,
-                    contentPadding = PaddingValues(horizontal = 8.dp)) { Text("刷新", maxLines = 1) }
-                TextButton(onClick = ::toggleOrientation, enabled = activity != null,
-                    contentPadding = PaddingValues(horizontal = 8.dp)) { Text("横/竖屏", maxLines = 1) }
-            }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = ::extract, enabled = webView != null && !busy && !loading,
-                contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text(if (busy) "识别中" else "读取课表", maxLines = 1)
-            }
-            Box {
-                TextButton(onClick = { menuOpen = true }, contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.width(40.dp)) { Text("⋮") }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (compactToolbar) {
-                        DropdownMenuItem(text = { Text(if (desktopMode) "手机模式" else "桌面模式") },
-                            onClick = { menuOpen = false; switchViewMode() })
-                        DropdownMenuItem(text = { Text("刷新") }, enabled = webView != null,
-                            onClick = { menuOpen = false; webView?.reload() })
-                        DropdownMenuItem(text = { Text("横/竖屏") }, enabled = activity != null,
-                            onClick = { menuOpen = false; toggleOrientation() })
-                    }
-                    DropdownMenuItem(text = { Text("清除登录会话") }, onClick = { menuOpen = false; confirmClear = true })
-                    DropdownMenuItem(text = { Text("隐藏工具栏") }, onClick = {
-                        menuOpen = false
-                        chromeVisible = false
-                        error = "已隐藏工具栏与地址栏；在页面上向下滑或点按屏幕顶部即可恢复。"
-                    })
-                }
-            }
+        BrowserToolbar(
+            address = address,
+            desktopMode = desktopMode,
+            compactToolbar = compactToolbar,
+            busy = busy,
+            loading = loading,
+            canOrientation = activity != null,
+            canReload = webView != null,
+            onBack = ::back,
+            onSwitchMode = ::switchViewMode,
+            onReload = { webView?.reload() },
+            onOrientation = ::toggleOrientation,
+            onExtract = ::extract,
+            onAddress = { showAddress = true },
+            onClearSession = { confirmClear = true },
+            onHideChrome = {
+                chromeVisible = false
+                error = "已隐藏工具栏与地址栏；在页面上向下滑或点按屏幕顶部即可恢复。"
+            },
+        )
         }
-        Text(address, Modifier.fillMaxWidth().clickable { showAddress = true }.padding(horizontal = 12.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (loading && chromeVisible) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (loading && chromeVisible) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         }
         if (schoolWebUrl(url)) key(url) { AndroidView(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -442,11 +425,11 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         Modifier.align(Alignment.TopCenter).fillMaxWidth().height(33.dp).background(
             androidx.compose.ui.graphics.Brush.verticalGradient(
                 listOf(
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                    LocalKelaileCanvas.current.fillElevated.copy(alpha = 0.55f),
                     androidx.compose.ui.graphics.Color.Transparent,
-                )
-            )
-        )
+                ),
+            ),
+        ),
     )
     if (!chromeVisible) Box(
         Modifier.align(Alignment.TopCenter).fillMaxWidth().height(18.dp)
@@ -458,17 +441,28 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
     if (!chromeVisible && loading) LinearProgressIndicator(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp))
     SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(8.dp))
     }
-    if (showAddress) AlertDialog(
-        onDismissRequest = { showAddress = false },
-        title = { Text("当前链接") },
-        text = { SelectionContainer { Text(address, Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) } },
-        confirmButton = { TextButton(onClick = { showAddress = false }) { Text("关闭") } },
+    KelaileDialog(
+        visible = showAddress,
+        onDismiss = { showAddress = false },
+        title = "当前链接",
+        confirmLabel = "关闭",
+        content = {
+            SelectionContainer {
+                Text(
+                    address,
+                    Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
     )
-    if (confirmClear) AlertDialog(
-        onDismissRequest = { confirmClear = false },
-        title = { Text("清除登录会话？") },
-        text = { Text("将清除应用内 WebView 的全部 Cookie、网页本地存储及缓存，可能退出其他学校网站的登录。无法撤销。") },
-        confirmButton = { TextButton(onClick = {
+    KelaileDialog(
+        visible = confirmClear,
+        onDismiss = { confirmClear = false },
+        title = "清除登录会话？",
+        message = "将清除应用内 WebView 的全部 Cookie、网页本地存储及缓存，可能退出其他学校网站的登录。无法撤销。",
+        confirmLabel = "清除",
+        onConfirm = {
             confirmClear = false
             val browser = webView
             browser?.stopLoading()
@@ -482,28 +476,45 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
             CookieManager.getInstance().removeAllCookies {
                 CookieManager.getInstance().flush()
                 if (lifetime.alive) {
-
                     browser?.loadUrl(url)
                     error = "已清除登录会话、网页存储和缓存。"
                 }
             }
-        }) { Text("清除") } },
-        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("取消") } },
+        },
+        dismissLabel = "取消",
     )
     recognized?.let { imported ->
         var manualSchool by remember(imported) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { recognized = null },
-            title = { Text("核对并确认导入") },
-            text = {
-                Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("识别到 ${imported.courses.size} 条课程。确认后交由本地课表导入处理，可能替换现有课程；请先核对。")
+        KelaileDialog(
+            visible = true,
+            onDismiss = { recognized = null },
+            title = "核对并确认导入",
+            confirmLabel = "确认导入",
+            onConfirm = {
+                recognized = null
+                latestImport(imported.copy(school = imported.school ?: manualSchool.trim().takeIf { it.isNotEmpty() }))
+            },
+            dismissLabel = "取消",
+            content = {
+                Column(
+                    Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "识别到 ${imported.courses.size} 条课程。确认后交由本地课表导入处理，可能替换现有课程；请先核对。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                     if (imported.school != null) {
                         Text(if (existingSchool.isNotBlank()) "学校：${imported.school}（保留已有学校）" else "识别学校：${imported.school}")
                     } else {
                         Text("未可靠识别学校，可在确认时补填；留空不会覆盖已有学校。")
-                        OutlinedTextField(value = manualSchool, onValueChange = { manualSchool = it.take(100) },
-                            label = { Text("学校名称（选填）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = manualSchool,
+                            onValueChange = { manualSchool = it.take(100) },
+                            label = { Text("学校名称（选填）") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                     Text(imported.weekCount?.let { "学期共 $it 周" } ?: "未识别总周数，不会凭空生成学期数据。")
                     Text(imported.currentWeek?.let { "当前第 $it 周" } ?: "未识别当前周，请核对本地设置。")
@@ -513,16 +524,127 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
                             imported.periods.joinToString("、") { clock(it.startMinutes) + "–" + clock(it.endMinutes) }
                     )
                     imported.courses.forEach { course ->
-                        Text("${course.name} · 星期${"一二三四五六日"[course.weekday - 1]} · ${course.startPeriod}–${course.endPeriod}节\n周次：${course.weeks.joinToString()}\n教师：${course.teacher.ifBlank { "未识别" }}；地点：${course.location.ifBlank { "未识别" }}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "${course.name} · 星期${"一二三四五六日"[course.weekday - 1]} · ${course.startPeriod}–${course.endPeriod}节\n周次：${course.weeks.joinToString()}\n教师：${course.teacher.ifBlank { "未识别" }}；地点：${course.location.ifBlank { "未识别" }}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = {
-                recognized = null
-                latestImport(imported.copy(school = imported.school ?: manualSchool.trim().takeIf { it.isNotEmpty() }))
-            }) { Text("确认导入") } },
-            dismissButton = { TextButton(onClick = { recognized = null }) { Text("取消") } },
         )
+    }
+}
+
+/**
+ * 浏览器工具栏：玻璃胶囊里放返回、模式、刷新与识别动作，下方一条地址行。
+ */
+@Composable
+private fun BrowserToolbar(
+    address: String,
+    desktopMode: Boolean,
+    compactToolbar: Boolean,
+    busy: Boolean,
+    loading: Boolean,
+    canOrientation: Boolean,
+    canReload: Boolean,
+    onBack: () -> Unit,
+    onSwitchMode: () -> Unit,
+    onReload: () -> Unit,
+    onOrientation: () -> Unit,
+    onExtract: () -> Unit,
+    onAddress: () -> Unit,
+    onClearSession: () -> Unit,
+    onHideChrome: () -> Unit,
+) {
+    val canvas = LocalKelaileCanvas.current
+    val shape = RoundedCornerShape(KelaileShapes.capsule)
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
+                .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
+                .height(50.dp)
+                .padding(start = 6.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(38.dp).clip(CircleShape).clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) { KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface) }
+            Spacer(Modifier.width(4.dp))
+            if (!compactToolbar) {
+                GlassPillButton(
+                    if (desktopMode) "桌面" else "手机",
+                    onClick = onSwitchMode,
+                    compact = true,
+                )
+                Spacer(Modifier.width(6.dp))
+                GlassPillButton("刷新", onClick = onReload, compact = true)
+                Spacer(Modifier.width(6.dp))
+                GlassPillButton("横/竖屏", onClick = onOrientation, compact = true)
+            }
+            Spacer(Modifier.weight(1f))
+            GlassPillButton(
+                if (busy) "识别中" else "读取课表",
+                onClick = onExtract,
+                compact = true,
+                tint = if (busy || loading) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(4.dp))
+            Box {
+                Box(
+                    Modifier.size(34.dp).clip(CircleShape).clickable { menu = true },
+                    contentAlignment = Alignment.Center,
+                ) { Text("⋯", style = MaterialTheme.typography.titleMedium) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    if (compactToolbar) {
+                        DropdownMenuItem(
+                            text = { Text(if (desktopMode) "手机模式" else "桌面模式") },
+                            onClick = { menu = false; onSwitchMode() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("刷新") },
+                            enabled = canReload,
+                            onClick = { menu = false; onReload() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("横/竖屏") },
+                            enabled = canOrientation,
+                            onClick = { menu = false; onOrientation() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("清除登录会话") },
+                        onClick = { menu = false; onClearSession() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("隐藏工具栏") },
+                        onClick = { menu = false; onHideChrome() },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(KelaileShapes.rounded(KelaileShapes.capsule))
+                .background(canvas.fillSunken)
+                .clickable(onClick = onAddress)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                address,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

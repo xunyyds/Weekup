@@ -18,11 +18,14 @@ object ScheduleActions {
         val count=maxOf(imported.weekCount ?: data.settings.weekCount,imported.courses.maxOf { it.weeks.max() })
 
         val periods=if(imported.periods.isEmpty())data.settings.periods else run {
-            val merged=imported.periods.associateBy { it.period }.toMutableMap()
-            val lastEnd=imported.periods.maxOf { it.endMinutes }
-            data.settings.periods.filter { it.period !in merged && it.startMinutes>=lastEnd }
-                .forEach { merged[it.period]=it }
-            merged.values.sortedBy { it.period }
+            val base=imported.periods.sortedBy { it.period }
+            val used=base.map { it.period }.toSet()
+            val ceiling=base.maxOf { it.period }
+            val lastEnd=base.maxOf { it.endMinutes }
+            val extra=data.settings.periods
+                .filter { it.period !in used && it.startMinutes>=lastEnd }
+                .sortedBy { it.startMinutes }
+            base+extra.mapIndexed { index, period -> period.copy(period=ceiling+1+index) }
         }
         return data.copy(settings=data.settings.copy(
             school=imported.school?.takeIf { it.isNotBlank() } ?: data.settings.school,

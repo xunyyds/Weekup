@@ -6,26 +6,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import com.xunyyds.kelaile.ui.glass.liquidGlass
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,66 +33,114 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.isRuntimeShaderSupported
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
+import com.xunyyds.kelaile.ui.glass.DampedDragAnimation
+import com.xunyyds.kelaile.ui.glass.InteractiveHighlight
+import com.xunyyds.kelaile.ui.glass.rememberContentLayerBackdrop
+import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.xunyyds.kelaile.ui.glass.glassPanel
+import com.xunyyds.kelaile.ui.glass.glassSheen
+import com.xunyyds.kelaile.ui.glass.liquidGlass
+import kotlin.math.sign
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private class SectionCursor { var next = 0 }
+
+private val LocalSectionCursor = staticCompositionLocalOf<SectionCursor?> { null }
 
 private class StaggerCursor { var next = 0 }
 
 private val LocalStaggerCursor = staticCompositionLocalOf<StaggerCursor?> { null }
 
-private const val StaggerRiseDp = 10f
+private const val StaggerRiseDp = 12f
 
 @Composable
 private fun Modifier.staggerEnter(delayMillis: Int): Modifier {
     val motion = kelaileMotionEnabled()
     val appear = remember { Animatable(if (motion) 0f else 1f) }
     LaunchedEffect(motion) {
-        if (motion) appear.animateTo(1f, tween(delayMillis, easing = KelaileMotion.emphasizedEasing))
+        if (motion) appear.animateTo(1f, tween(delayMillis, easing = KelaileMotion.decelerateEasing))
         else appear.snapTo(1f)
     }
     val rise = with(LocalDensity.current) { StaggerRiseDp.dp.toPx() }
@@ -116,136 +150,158 @@ private fun Modifier.staggerEnter(delayMillis: Int): Modifier {
     }
 }
 
+/**
+ * 分组玻璃卡片。
+ *
+ * 分类标题留在卡片外（iOS 设置页的分组语义），组内条目共用一张大圆角磨砂卡。
+ * 组内相邻条目之间由 [SettingRow] 自己画出内缩的发丝分隔线，因此调用方
+ * 仍然可以像以前那样直接列条目，不需要手工插分隔。
+ */
 @Composable
 fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    val canvas = LocalKelaileCanvas.current
     val shape = KelaileShapes.rounded(KelaileShapes.card)
-    val stagger = kelaileMotionEnabled()
-    val cursor = remember(stagger) { if (stagger) StaggerCursor() else null }
+    val motion = kelaileMotionEnabled()
+    val cursor = remember(motion) { if (motion) StaggerCursor() else null }
+    val rows = remember { SectionCursor() }
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KelaileSpacing.sm),
     ) {
         if (title.isNotBlank()) {
             Text(
-                title,
+                title.uppercase(),
                 modifier = Modifier
-                    .padding(horizontal = KelaileSpacing.lg)
+                    .padding(horizontal = KelaileSpacing.xl + 2.dp)
                     .semantics { heading() },
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                letterSpacing = 0.6.sp,
             )
         }
-        Surface(
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
-                .then(KelaileElevation.soft(KelaileElevation.card, shape)),
-            shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
+                .then(KelaileElevation.soft(KelaileElevation.card, shape))
+                .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
+                .glassSheen(shape, Color.White),
         ) {
-
-            CompositionLocalProvider(LocalStaggerCursor provides cursor) {
+            CompositionLocalProvider(
+                LocalStaggerCursor provides cursor,
+                LocalSectionCursor provides rows,
+            ) {
                 Column(content = content)
             }
         }
     }
 }
 
+/** 组内发丝分隔线：只有非首行才画，并左右内缩到文字对齐的位置。 */
+@Composable
+private fun SectionDivider() {
+    val canvas = LocalKelaileCanvas.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 18.dp, end = 18.dp)
+            .height(1.dp)
+            .background(canvas.divider),
+    )
+}
+
+@Composable
+private fun rememberRowSlot(): Pair<Int, Boolean> {
+    val cursor = LocalSectionCursor.current
+    val stagger = LocalStaggerCursor.current
+    val isFirst = remember(cursor) {
+        val index = cursor?.next ?: 0
+        if (cursor != null) cursor.next = index + 1
+        index == 0
+    }
+    val staggerSlot = remember(stagger) { stagger?.next?.also { stagger.next = it + 1 } ?: 0 }
+    return staggerSlot to isFirst
+}
+
+/**
+ * 自定义内容的分组行。
+ *
+ * 统一处理「非首行画分隔线」与「错峰入场」，让开关行、滑条行、颜色行
+ * 与普通 [SettingRow] 在同一张玻璃卡里视觉一致。
+ *
+ * [alwaysDivider] 用于卡片里第一个条目也要分隔线的情况（例如自由输入框之后接的下拉行）。
+ */
+@Composable
+internal fun SectionRow(alwaysDivider: Boolean = false, content: @Composable () -> Unit) {
+    val (slot, isFirst) = rememberRowSlot()
+    Column(Modifier.fillMaxWidth().staggerEnter(kelaileStaggerDelay(slot))) {
+        if (alwaysDivider || !isFirst) SectionDivider()
+        content()
+    }
+}
+
 @Composable
 fun SettingRow(title: String, subtitle: String = "", onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
-    val cursor = LocalStaggerCursor.current
-    val slot = remember(cursor) { cursor?.next?.also { cursor.next = it + 1 } ?: 0 }
-
-    val delay = kelaileStaggerDelay(slot)
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .staggerEnter(delay)
-            .clickable(role = Role.Button) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            }
-            .heightIn(min = if (subtitle.isBlank()) 58.dp else 76.dp)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xs),
+    val motion = kelaileMotionEnabled()
+    val (slot, isFirst) = rememberRowSlot()
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val canvas = LocalKelaileCanvas.current
+    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = if (pressed) 0.10f else 0f)
+    val tone by animateColorAsState(
+        highlight,
+        animationSpec = if (motion) tween(KelaileMotion.fast) else snap(),
+        label = "Row tone",
+    )
+    Column(Modifier.fillMaxWidth().staggerEnter(kelaileStaggerDelay(slot))) {
+        if (!isFirst) SectionDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(tone)
+                .clickable(
+                    interactionSource = source,
+                    indication = null,
+                    role = Role.Button,
+                ) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                }
+                .heightIn(min = if (subtitle.isBlank()) 54.dp else 70.dp)
+                .padding(horizontal = 18.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle.isNotBlank()) Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.width(KelaileSpacing.lg))
-        val chevron = MaterialTheme.colorScheme.onSurfaceVariant
-        Canvas(Modifier.size(8.dp, 14.dp)) {
-            drawPath(
-                Path().apply {
-                    moveTo(size.width * 0.2f, size.height * 0.15f)
-                    lineTo(size.width * 0.8f, size.height * 0.5f)
-                    lineTo(size.width * 0.2f, size.height * 0.85f)
-                },
-                chevron,
-                style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round),
-            )
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
+                    )
+                }
+            }
+            Spacer(Modifier.width(KelaileSpacing.lg))
+            Chevron(if (canvas.isDark) Color.White.copy(alpha = 0.34f) else Color(0xFF1B2230).copy(alpha = 0.26f))
         }
     }
 }
 
 @Composable
-fun PressCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.surfaceContainer,
-    shape: androidx.compose.ui.graphics.Shape = KelaileShapes.rounded(KelaileShapes.card),
-    minHeight: androidx.compose.ui.unit.Dp = 48.dp,
-    contentPadding: androidx.compose.ui.unit.Dp = 10.dp,
-    contentAlignment: androidx.compose.ui.Alignment.Horizontal = androidx.compose.ui.Alignment.Start,
-    contentVerticalArrangement: androidx.compose.ui.Alignment.Vertical = androidx.compose.ui.Alignment.Top,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val motion = kelaileMotionEnabled()
-    val scale by animateFloatAsState(
-        if (pressed && motion) 0.985f else 1f,
-        animationSpec = if (motion) {
-            tween(KelaileMotion.quick, easing = KelaileMotion.emphasizedEasing)
-        } else snap(),
-        label = "Card press",
-    )
-    val baseColor = color
-    val tone by animateColorAsState(
-        if (pressed && motion) lerp(baseColor, MaterialTheme.colorScheme.onSurface, 0.05f) else baseColor,
-        animationSpec = if (motion) {
-            tween(KelaileMotion.fast, easing = KelaileMotion.standardEasing)
-        } else snap(),
-        label = "Card tone",
-    )
-    val haptic = LocalHapticFeedback.current
-    val contentColor = if (color == MaterialTheme.colorScheme.primary) {
-        MaterialTheme.colorScheme.onPrimary
-    } else MaterialTheme.colorScheme.onSurface
-    Box(
-        modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape).background(tone)
-            .clickable(interactionSource = source, indication = null, role = Role.Button) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            }
-            .heightIn(min = minHeight),
-    ) {
-        CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Column(
-                Modifier.fillMaxWidth().fillMaxHeight().padding(contentPadding),
-                horizontalAlignment = contentAlignment,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.aligned(contentVerticalArrangement),
-                content = content,
-            )
-        }
+internal fun Chevron(tint: Color) {
+    Canvas(Modifier.size(7.dp, 12.dp)) {
+        drawPath(
+            Path().apply {
+                moveTo(size.width * 0.18f, size.height * 0.14f)
+                lineTo(size.width * 0.82f, size.height * 0.5f)
+                lineTo(size.width * 0.18f, size.height * 0.86f)
+            },
+            tint,
+            style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
     }
 }
 
@@ -256,15 +312,273 @@ fun KelaileDock(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (style == "liquid") {
+        LiquidDock(index = index, onSelect = onSelect, modifier = modifier)
+    } else {
+        PanelDock(style = style, index = index, onSelect = onSelect, modifier = modifier)
+    }
+}
+
+/**
+ * 液态玻璃底栏：折射页面内容采样层，拖拽滑块带速度挤压与色散。
+ *
+ * 材质与阻尼手感取自 kyant backdrop 官方 catalog（About 页已署名该库），
+ * 并按 qfun 资源管理页的做法拆成「面板 + 隐形图标层 + 滑块」三层：
+ * 图标层录进 tabsBackdrop，滑块折射 combined(内容, 图标层)，所以滑块经过时
+ * 图标会被真实地「推鼓」，而不是叠一层纯色。不支持时退化为悬浮胶囊栏。
+ */
+@Composable
+private fun LiquidDock(
+    index: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val labels = listOf("课表", "设置")
+    val selected = index.coerceIn(labels.indices)
+    val canvas = LocalKelaileCanvas.current
+    val colors = MaterialTheme.colorScheme
+    val backdrop = rememberContentLayerBackdrop()
+    if (backdrop == null || !isRuntimeShaderSupported()) {
+        PanelDock(style = "floating", index = selected, onSelect = onSelect, modifier = modifier)
+        return
+    }
+    val haptic = LocalHapticFeedback.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val tabsBackdrop = rememberLayerBackdrop()
+
+    BoxWithConstraints(
+        modifier,
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val density = LocalDensity.current
+        val panelWidth = constraints.maxWidth.toFloat()
+        val slotWidth = if (labels.isNotEmpty()) with(density) { (panelWidth - 8f.dp.toPx()) / labels.size } else 0f
+        val scope = rememberCoroutineScope()
+        var dragStartIndex by remember { mutableIntStateOf(selected) }
+        var currentIndex by remember { mutableIntStateOf(selected) }
+
+        val offsetAnimation = remember { Animatable(0f) }
+        val panelOffset by remember(density) {
+            derivedStateOf {
+                val fraction = if (panelWidth > 0f) (offsetAnimation.value / panelWidth).coerceIn(-1f, 1f) else 0f
+                with(density) { 4f.dp.toPx() * fraction.sign * EaseOut.transform(abs(fraction)) }
+            }
+        }
+
+        val damped = remember(scope, labels.size, slotWidth) {
+            DampedDragAnimation(
+                animationScope = scope,
+                initialValue = selected.toFloat(),
+                valueRange = 0f..(labels.size - 1).toFloat(),
+                visibilityThreshold = 0.001f,
+                initialScale = 1f,
+                pressedScale = 78f / 56f,
+                onDragStarted = {
+                    dragStartIndex = value.roundToInt().coerceIn(labels.indices)
+                },
+                onDragStopped = {
+                    val destination = targetValue.roundToInt().coerceIn(labels.indices)
+                    currentIndex = destination
+                    animateToValue(destination.toFloat())
+                    if (destination != dragStartIndex) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(destination)
+                    }
+                    scope.launch { offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f)) }
+                },
+                onDrag = { _, dragAmount ->
+                    val step = if (slotWidth > 0f) dragAmount.x / slotWidth else 0f
+                    updateValue(
+                        (targetValue + if (rtl) -step else step)
+                            .coerceIn(0f, (labels.size - 1).toFloat()),
+                    )
+                    scope.launch { offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x) }
+                },
+            )
+        }
+        LaunchedEffect(selected, labels.size) {
+            val newIndex = selected.coerceIn(labels.indices)
+            if (currentIndex != newIndex) {
+                currentIndex = newIndex
+                damped.animateToValue(newIndex.toFloat())
+            }
+        }
+
+        val highlight = remember(scope, slotWidth) {
+            InteractiveHighlight(
+                animationScope = scope,
+                position = { size, _ ->
+                    Offset(
+                        if (rtl) size.width - (damped.value + 0.5f) * slotWidth + panelOffset
+                        else (damped.value + 0.5f) * slotWidth + panelOffset,
+                        size.height / 2f,
+                    )
+                },
+            )
+        }
+        val panelShape = { RoundedCornerShape(KelaileShapes.dock) }
+        val fill = canvas.fillElevated.copy(alpha = if (canvas.isDark) 0.42f else 0.34f)
+
+        Row(
+            Modifier
+                .graphicsLayer { translationX = panelOffset }
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = panelShape,
+                    effects = {
+                        vibrancy()
+                        blur(8f.dp.toPx())
+                        lens(24f.dp.toPx(), 24f.dp.toPx())
+                    },
+                    layerBlock = {
+                        val scale = 1f + 0.05f * damped.pressProgress
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                    onDrawSurface = { drawRect(fill) },
+                )
+                .then(highlight.modifier)
+                .height(64f.dp)
+                .fillMaxWidth()
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DockTabRow(labels, selected, onSelect, tinted = false)
+        }
+
+        CompositionLocalProvider(LocalLiquidIconScale provides { 1f + 0.2f * damped.pressProgress }) {
+            Row(
+                Modifier
+                    .clearAndSetSemantics { }
+                    .alpha(0f)
+                    .layerBackdrop(tabsBackdrop)
+                    .graphicsLayer { translationX = panelOffset }
+                    .height(56f.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .graphicsLayer(colorFilter = ColorFilter.tint(colors.primary)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DockTabRow(labels, selected, onSelect, tinted = true)
+            }
+        }
+
+        Box(
+            Modifier
+                .padding(horizontal = 4.dp)
+                .graphicsLayer {
+                    translationX = if (rtl) {
+                        panelWidth - (damped.value + 1f) * slotWidth + panelOffset
+                    } else {
+                        damped.value * slotWidth + panelOffset
+                    }
+                }
+                .then(highlight.gestureModifier)
+                .then(damped.modifier)
+                .drawBackdrop(
+                    backdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop),
+                    shape = { Capsule() },
+                    effects = {
+                        val progress = damped.pressProgress
+                        lens(
+                            10f.dp.toPx() * progress,
+                            14f.dp.toPx() * progress,
+                            chromaticAberration = true,
+                        )
+                    },
+                    highlight = { Highlight.Default.copy(alpha = damped.pressProgress) },
+                    shadow = { Shadow(alpha = damped.pressProgress) },
+                    innerShadow = {
+                        InnerShadow(radius = 8f.dp * damped.pressProgress, alpha = damped.pressProgress)
+                    },
+                    layerBlock = {
+                        val velocity = damped.velocity / 10f
+                        scaleX = damped.scaleX / (1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f))
+                        scaleY = damped.scaleY * (1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f))
+                    },
+                    onDrawSurface = {
+                        drawRect(
+                            if (canvas.isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.1f),
+                            alpha = 1f - damped.pressProgress,
+                        )
+                    },
+                )
+                .height(56f.dp)
+                .fillMaxWidth(1f / labels.size),
+        )
+    }
+}
+
+/**
+ * 底栏标签内容：可见层用正常墨色；隐形层全用白色，再经主色 colorFilter 变成折射源。
+ */
+@Composable
+private fun RowScope.DockTabRow(
+    labels: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    tinted: Boolean,
+) {
+    val colors = MaterialTheme.colorScheme
+    val scale = LocalLiquidIconScale.current
+    labels.forEachIndexed { item, title ->
+        val ink = when {
+            tinted -> Color.White
+            item == selected -> colors.primary
+            else -> colors.onSurfaceVariant
+        }
+        Column(
+            Modifier
+                .clip(Capsule())
+                .clickable(
+                    interactionSource = null,
+                    indication = null,
+                    role = Role.Tab,
+                    onClick = { if (item != selected) onSelect(item) },
+                )
+                .fillMaxHeight()
+                .weight(1f)
+                .graphicsLayer { scaleX = scale(); scaleY = scale() },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+        ) {
+            DockGlyph(if (item == 0) 2 else 3, ink)
+            Text(
+                title,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                fontWeight = if (item == selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = ink,
+            )
+        }
+    }
+}
+
+private val LocalLiquidIconScale = staticCompositionLocalOf { { 1f } }
+
+/**
+ * 实体/悬浮玻璃底栏：贴底面板或离地胶囊，滑块只做位置移动。
+ */
+@Composable
+private fun PanelDock(
+    style: String,
+    index: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val labels = listOf("课表", "设置")
     val selected = index.coerceIn(labels.indices)
     val solid = style == "default"
     val floating = !solid
-    val liquid = style == "liquid"
     val colors = MaterialTheme.colorScheme
+    val canvas = LocalKelaileCanvas.current
     val outerRadius = if (floating) KelaileShapes.dock else KelaileShapes.tiny
-    val dockInset = 6.dp
-    val shape = if (solid) androidx.compose.ui.graphics.RectangleShape else KelaileShapes.rounded(outerRadius)
+    val dockInset = 5.dp
+    val shape: Shape = if (solid) {
+        RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+    } else {
+        KelaileShapes.rounded(outerRadius)
+    }
 
     val indicatorShape = KelaileShapes.rounded(KelaileShapes.nested(outerRadius, dockInset))
     val motion = kelaileMotionEnabled()
@@ -278,29 +592,28 @@ fun KelaileDock(
 
     val settledPosition by animateFloatAsState(
         if (dragging) dragPosition else selected.toFloat(),
-        animationSpec = if (motion && !dragging) spring(dampingRatio = 0.85f, stiffness = 420f) else snap(),
+        animationSpec = if (motion && !dragging) spring(dampingRatio = 0.78f, stiffness = 360f) else snap(),
         label = "Dock indicator position",
     )
     val position = (if (dragging) dragPosition else settledPosition).coerceIn(0f, 1f)
     val haptic = LocalHapticFeedback.current
-    val base = if (liquid) Modifier
-        .liquidGlass(
-            outerRadius.value,
-            colors.surface.copy(alpha = 0.26f),
-            colors.surfaceContainerHigh,
-        )
-        .border(1.dp, colors.outlineVariant.copy(alpha = 0.55f), shape)
-    else Modifier.background(if (solid) colors.surfaceContainerLow else colors.surfaceContainer)
+    val base = if (solid) {
+        Modifier.glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom, 0.dp)
+    } else {
+        Modifier
+            .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+            .glassSheen(shape, Color.White)
+    }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
         BoxWithConstraints(
-            Modifier.widthIn(max = if (floating) 300.dp else androidx.compose.ui.unit.Dp.Infinity)
+            Modifier.widthIn(max = if (floating) 320.dp else Dp.Infinity)
                 .fillMaxWidth()
                 .then(
                     if (floating) {
-                        KelaileElevation.soft(KelaileElevation.dock, shape, 0.05f, 0.10f)
+                        KelaileElevation.soft(KelaileElevation.dock, shape, 0.06f, 0.12f)
                     } else Modifier,
                 )
                 .clip(shape).then(base).padding(if (floating) dockInset else 0.dp)
@@ -328,7 +641,6 @@ fun KelaileDock(
                             val destination = dragPosition.roundToInt().coerceIn(0, 1)
                             dragging = false
                             dragStretch = 0f
-
                             if (destination != currentSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentOnSelect(destination)
@@ -344,34 +656,32 @@ fun KelaileDock(
         ) {
             val slot = maxWidth / labels.size
 
-            if (floating) Box(Modifier.matchParentSize()) {
-                val indicatorMaterial = if (liquid) Modifier.liquidGlass(
-                    KelaileShapes.nested(outerRadius, dockInset).value,
-                    colors.primaryContainer.copy(alpha = 0.40f),
-                    colors.primaryContainer,
-                ) else Modifier.background(colors.primaryContainer)
-                Box(
-                    Modifier.offset(x = slot * position).width(slot).fillMaxSize()
-                        .padding(KelaileSpacing.hairline)
-                        .graphicsLayer {
-                            val stretch = if (motion && dragging) {
-                                dragStretch * (1f - abs(2f * position - 1f))
-                            } else 0f
-                            scaleX = 1f + stretch
-                            scaleY = 1f - stretch * 0.35f
-                        }
-                        .clip(indicatorShape).then(indicatorMaterial)
-                        .then(
-                            if (liquid) Modifier.border(
-                                1.dp, colors.primary.copy(alpha = 0.22f), indicatorShape,
-                            ) else Modifier,
-                        ),
-                )
+            if (floating) {
+                Box(Modifier.matchParentSize()) {
+                    val indicatorMaterial = Modifier.glassPanel(
+                        indicatorShape,
+                        colors.primaryContainer.copy(alpha = if (canvas.isDark) .82f else .92f),
+                        Color.White.copy(alpha = .40f),
+                        Color.White.copy(alpha = .10f),
+                    )
+                    Box(
+                        Modifier.offset(x = slot * position).width(slot).fillMaxSize()
+                            .padding(KelaileSpacing.hairline)
+                            .graphicsLayer {
+                                val stretch = if (motion && dragging) {
+                                    dragStretch * (1f - abs(2f * position - 1f))
+                                } else 0f
+                                scaleX = 1f + stretch
+                                scaleY = 1f - stretch * 0.35f
+                            }
+                            .clip(indicatorShape).then(indicatorMaterial),
+                    )
+                }
             }
 
             if (solid) Box(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp)
-                    .background(colors.outlineVariant.copy(alpha = .6f)),
+                    .background(canvas.strokeTop.copy(alpha = .8f)),
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 labels.forEachIndexed { item, title ->
@@ -403,7 +713,7 @@ fun KelaileDock(
                                     }
                                 },
                             )
-                            .heightIn(min = 60.dp)
+                            .heightIn(min = 58.dp)
                             .padding(horizontal = KelaileSpacing.xs, vertical = KelaileSpacing.sm)
                             .graphicsLayer { scaleX = scale; scaleY = scale },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -423,12 +733,11 @@ fun KelaileDock(
         }
     }
 }
-
 @Composable
 private fun DockGlyph(index: Int, color: Color) {
     Canvas(Modifier.size(22.dp)) {
         val u = size.width / 24f
-        val pen = Stroke(width = 1.8f * u, cap = StrokeCap.Round)
+        val pen = Stroke(width = 1.8f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (index) {
             0 -> {
                 drawCircle(color, 8f * u, Offset(12f * u, 13f * u), style = pen)
@@ -529,20 +838,21 @@ fun KelaileSearchField(
     shape: Shape = RoundedCornerShape(28.dp),
     contentDescriptionText: String = "搜索框",
 ) {
+    val canvas = LocalKelaileCanvas.current
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(6.dp, shape, clip = false)
+            .then(KelaileElevation.soft(8.dp, shape, 0.03f, 0.07f))
             .semantics { contentDescription = contentDescriptionText },
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = canvas.fillElevated.copy(alpha = if (canvas.isDark) 0.72f else 0.86f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, canvas.strokeTop),
     ) {
         TextField(
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth().onFocusChanged { onFocusChange(it.isFocused) },
-            placeholder = { Text(placeholder) },
+            placeholder = { Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             leadingIcon = {
                 KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             },
@@ -628,30 +938,30 @@ fun SearchResultRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                if (pressed) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .heightIn(min = if (subtitle.text.isBlank()) 58.dp else 76.dp)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle.text.isNotBlank()) Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    val (_, isFirst) = rememberRowSlot()
+    Column(Modifier.fillMaxWidth()) {
+        if (!isFirst) SectionDivider()
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (pressed) 0.09f else 0f))
+                .clickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
+                .heightIn(min = if (subtitle.text.isBlank()) 54.dp else 70.dp)
+                .padding(horizontal = 18.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (subtitle.text.isNotBlank()) Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -703,7 +1013,7 @@ fun KelaileGlyph(
     kind: KelaileGlyphKind,
     tint: Color = LocalContentColor.current,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 22.dp,
+    size: Dp = 22.dp,
 ) {
     Canvas(modifier.size(size)) {
         val u = this.size.minDimension / 24f
@@ -723,4 +1033,131 @@ fun KelaileGlyph(
             }
         }
     }
+}
+
+/**
+ * 课程玻璃卡片。
+ *
+ * 底色是课程分类色与磨砂面板的混合，上面再压一层自上而下的白色高光和 1dp 描边，
+ * 这样既保留了课程自己的色相，又不会变成一块不透明的纯色块。
+ */
+@Composable
+fun GlassCourseCard(
+    onClick: () -> Unit,
+    tint: Color,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+    contentPadding: Dp = 6.dp,
+    contentAlignment: Alignment.Horizontal = Alignment.Start,
+    contentVerticalArrangement: Alignment.Vertical = Alignment.Top,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val motion = kelaileMotionEnabled()
+    val canvas = LocalKelaileCanvas.current
+    val scale by animateFloatAsState(
+        if (pressed && motion) 0.968f else 1f,
+        animationSpec = if (motion) {
+            spring(dampingRatio = 0.72f, stiffness = 620f)
+        } else snap(),
+        label = "Course card press",
+    )
+    val haptic = LocalHapticFeedback.current
+    val topSheen = if (canvas.isDark) 0.12f else 0.38f
+    val topStroke = if (canvas.isDark) 0.26f else 0.72f
+    Box(
+        modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(tint)
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = topSheen),
+                    0.42f to Color.White.copy(alpha = topSheen * 0.12f),
+                    1f to Color.Black.copy(alpha = if (canvas.isDark) 0.10f else 0.035f),
+                ),
+            )
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = topStroke),
+                    0.6f to Color.White.copy(alpha = 0.10f),
+                    1f to Color.White.copy(alpha = 0.04f),
+                ),
+                shape,
+            )
+            .clickable(interactionSource = source, indication = null, role = Role.Button) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(contentPadding),
+            horizontalAlignment = contentAlignment,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.aligned(contentVerticalArrangement),
+            content = content,
+        )
+    }
+}
+
+/** 玻璃胶囊按钮，用于顶栏与卡片内的轻量动作。 */
+@Composable
+fun GlassPillButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.primary,
+    compact: Boolean = false,
+) {
+    val canvas = LocalKelaileCanvas.current
+    val shape = RoundedCornerShape(KelaileShapes.capsule)
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Box(
+        modifier
+            .then(KelaileElevation.soft(4.dp, shape, 0.02f, 0.05f))
+            .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+            .background(tint.copy(alpha = if (pressed) .16f else .08f))
+            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
+            .heightIn(min = if (compact) 32.dp else 38.dp)
+            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 6.dp else 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = tint,
+            maxLines = 1,
+        )
+    }
+}
+
+internal val GlassDividerTint: Color
+    @Composable get() = LocalKelaileCanvas.current.divider
+
+internal fun blended(base: Color, overlay: Color, amount: Float): Color = lerp(base, overlay, amount)
+
+/**
+ * 课程色转玻璃卡底色。
+ *
+ * 用户选的颜色当透光色用：不透明颜色按主题给定透明度（浅色更实、深色更透），
+ * 已经手动调过透明度的颜色则原样尊重，只夹在可读区间内。
+ */
+internal fun courseCardTint(raw: Color, dark: Boolean): Color {
+    val alpha = if (raw.alpha >= 0.999f) {
+        if (dark) 0.34f else 0.46f
+    } else {
+        raw.alpha.coerceIn(0.12f, 0.92f)
+    }
+    val rgb = raw.copy(alpha = 1f)
+    val shifted = if (dark) lerp(rgb, Color.White, 0.06f) else lerp(rgb, Color.Black, 0.05f)
+    return shifted.copy(alpha = alpha)
+}
+
+/** 在给定玻璃底色上选一组能读清楚的文字色。 */
+internal fun courseCardInk(tint: Color, dark: Boolean): Color {
+    val under = if (dark) Color(0xFF111823) else Color(0xFFF6F9FD)
+    val composed = tint.compositeOver(under)
+    return if (composed.luminance() > 0.56f) Color(0xFF15211B) else Color.White
 }

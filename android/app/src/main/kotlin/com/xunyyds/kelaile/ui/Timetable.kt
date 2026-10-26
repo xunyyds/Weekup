@@ -2,6 +2,7 @@ package com.xunyyds.kelaile.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.asImageBitmap
@@ -41,10 +43,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.data.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -122,6 +128,7 @@ internal data class GridPalette(
 @Composable
 internal fun rememberGridPalette(settings: AppSettings): GridPalette {
     val scheme = MaterialTheme.colorScheme
+    val canvas = LocalKelaileCanvas.current
     return remember(
         settings.tableHeaderColor,
         settings.cellBackgroundColor,
@@ -129,14 +136,21 @@ internal fun rememberGridPalette(settings: AppSettings): GridPalette {
         settings.gridLineColor,
         settings.gridLineStyle,
         scheme,
+        canvas,
     ) {
         fun resolve(value: Long, fallback: Color) =
             if (value == GRID_COLOR_AUTO) fallback else Color(value)
         GridPalette(
-            header = resolve(settings.tableHeaderColor, scheme.surfaceContainerLow),
-            cell = resolve(settings.cellBackgroundColor, scheme.surfaceContainerLow),
+            header = resolve(settings.tableHeaderColor, Color.Transparent),
+            cell = resolve(
+                settings.cellBackgroundColor,
+                canvas.fill.copy(alpha = if (canvas.isDark) 0.22f else 0.30f),
+            ),
             ink = resolve(settings.cellTextColor, scheme.onSurface),
-            line = resolve(settings.gridLineColor, scheme.outlineVariant),
+            line = resolve(
+                settings.gridLineColor,
+                if (canvas.isDark) Color.White.copy(alpha = 0.13f) else Color(0xFF1B2230).copy(alpha = 0.11f),
+            ),
             lineStyle = settings.gridLineStyle,
         )
     }
@@ -200,9 +214,15 @@ private fun DashedGridLines(
     }
 }
 
-private fun courseStyle(course: CourseSession, colors: Map<String, Long>, defaultColor: Long, surface: Color): CourseStyle {
-    val background = Color(colors[course.id] ?: defaultColor).compositeOver(surface)
-    return CourseStyle(background, if (background.luminance() > .4f) Color(0xff17231d) else Color.White)
+private fun courseVisual(
+    course: CourseSession,
+    colors: Map<String, Long>,
+    defaultColor: Long,
+    dark: Boolean,
+): CourseStyle {
+    val raw = Color(colors[course.id] ?: defaultColor)
+    val tint = courseCardTint(raw, dark)
+    return CourseStyle(tint, courseCardInk(tint, dark))
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -215,6 +235,7 @@ fun Timetable(
     onCourse: (CourseSession) -> Unit,
     onAdd: () -> Unit,
     locatedCourseId: String? = null,
+    onLocateHandled: () -> Unit = {},
     onImmersive: (Boolean) -> Unit = {},
     onBrowser: () -> Unit = {},
     onImportFile: () -> Unit = {},
@@ -268,11 +289,13 @@ fun Timetable(
     val projection = remember(data.courses, week, s.firstDay, s.lastDay, s.weekStart, s.periods) {
         projectWeek(data.courses, week, s.firstDay, s.lastDay, s.weekStart, s.periods)
     }
-    val surface = MaterialTheme.colorScheme.surface
+    val canvasColors = LocalKelaileCanvas.current
     val palette = rememberGridPalette(s)
-    val styles = remember(projection, surface, data.colors, s.defaultColor) {
+    val styles = remember(projection, data.colors, s.defaultColor, canvasColors.isDark) {
         projection.placed.values.asSequence().flatten()
-            .associate { it.course.id to courseStyle(it.course, data.colors, s.defaultColor, surface) }
+            .associate {
+                it.course.id to courseVisual(it.course, data.colors, s.defaultColor, canvasColors.isDark)
+            }
     }
     val background by rememberBackgroundPainter(s.timetableBackground)
 
@@ -414,24 +437,25 @@ fun Timetable(
             modifier = Modifier.graphicsLayer { translationY = if (immersive) -size.height else 0f },
             titleContent = {
                 if (editMode) {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text("排课编辑", style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         Text(
-                            "拖课程改时间；拖星期表头整列移动，拖左侧节次整行移动",
+                            "拖课程改时间；拖表头整列移动",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                     }
                 } else {
-
                     Column(
                         Modifier.fillMaxWidth().combinedClickable(
                             onClick = { pickerOpen = true },
                             onLongClick = { pickerOpen = true },
                         ),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
-                        Text("第 " + week + " 周", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                        Text("第 " + week + " 周", style = MaterialTheme.typography.titleLarge, maxLines = 1)
                         Text(
                             WeekDates.rangeLabel(s.start, week),
                             style = MaterialTheme.typography.labelSmall,
@@ -443,21 +467,30 @@ fun Timetable(
             },
             actions = {
                 if (editMode) {
-                    TextButton(onClick = onUndo, enabled = canUndo) { Text("撤销") }
-                    TextButton(onClick = onRevert) { Text("回退") }
-                    TextButton(onClick = { onEditMode(false) }) { Text("完成") }
+                    GlassPillButton("撤销", onClick = onUndo, compact = true)
+                    Spacer(Modifier.width(6.dp))
+                    GlassPillButton("回退", onClick = onRevert, compact = true)
+                    Spacer(Modifier.width(6.dp))
+                    GlassPillButton("完成", onClick = { onEditMode(false) }, compact = true)
                 } else {
-
                     if (week != s.currentWeek) {
-                        AssistChip(
+                        GlassPillButton(
+                            "回到本周",
                             onClick = { onViewWeek(s.currentWeek) },
-                            label = { Text("回到第 " + s.currentWeek + " 周") },
+                            compact = true,
                         )
+                        Spacer(Modifier.width(6.dp))
                     }
                     var menu by remember { mutableStateOf(false) }
                     Box {
-                        IconButton(onClick = { menu = true }) {
-                            Text("⋮", style = MaterialTheme.typography.titleMedium)
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable { menu = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("⋯", style = MaterialTheme.typography.titleMedium)
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             listOf(
@@ -479,14 +512,50 @@ fun Timetable(
             },
         )
         if (data.courses.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KelaileSpacing.lg)) {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                val canvas = LocalKelaileCanvas.current
+                val shape = KelaileShapes.rounded(KelaileShapes.sheet)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .then(KelaileElevation.soft(KelaileElevation.card, shape))
+                        .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
+                        .padding(horizontal = 24.dp, vertical = 30.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(KelaileSpacing.lg),
+                ) {
                     Text("每一周，都从容一点", style = MaterialTheme.typography.headlineSmall)
-                    Text("还没有课程，新增或导入你的课表")
-                    Button(onClick = onAdd) { Text("新增课程") }
+                    Text(
+                        "还没有课程，新增或导入你的课表",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    GlassPillButton("新增课程", onClick = onAdd)
                 }
             }
         } else {
+            val gridShape = KelaileShapes.rounded(KelaileShapes.card)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp)
+                    .then(KelaileElevation.soft(4.dp, gridShape, 0.03f, 0.06f))
+                    .clip(gridShape)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to canvasColors.fillElevated.copy(alpha = if (canvasColors.isDark) 0.5f else 0.62f),
+                            1f to canvasColors.fill.copy(alpha = if (canvasColors.isDark) 0.38f else 0.5f),
+                        ),
+                    )
+                    .border(
+                        1.dp,
+                        Brush.verticalGradient(
+                            0f to canvasColors.strokeTop,
+                            1f to canvasColors.strokeBottom,
+                        ),
+                        gridShape,
+                    ),
+            ) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -801,7 +870,18 @@ fun Timetable(
                                         ),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Column(
+                                        Modifier
+                                            .padding(horizontal = 2.dp)
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.small))
+                                            .then(
+                                                if (isToday) Modifier.background(
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = .14f),
+                                                ) else Modifier,
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
                                         Text(
                                             dayNames[day - 1].removePrefix("星期"),
                                             style = MaterialTheme.typography.labelMedium,
@@ -857,7 +937,10 @@ fun Timetable(
                                                         .height(with(density) { cellH.toDp() })
                                                         .fillMaxWidth()
                                                         .padding(gridCellPadding(palette.lineStyle))
-                                                        .background(palette.cell, gridCellShape),
+                                                        .background(
+                                                            palette.cell,
+                                                            androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                                                        ),
                                                 )
                                             }
                                         }
@@ -875,15 +958,42 @@ fun Timetable(
                                             val course = pc.course
                                             val laneW = with(density) { (cellW / pc.laneCount).toDp() }
                                             val style = styles[course.id]
-                                                ?: courseStyle(course, data.colors, s.defaultColor, surface)
+                                                ?: courseVisual(course, data.colors, s.defaultColor, canvasColors.isDark)
                                             val located = locatedCourseId == course.id
+                                            val locatePulse = remember { Animatable(0f) }
+                                            LaunchedEffect(located) {
+                                                if (located) {
+                                                    locatePulse.animateTo(
+                                                        1f,
+                                                        tween(KelaileMotion.quick, easing = KelaileMotion.emphasizedEasing),
+                                                    )
+                                                    locatePulse.animateTo(
+                                                        0.55f,
+                                                        tween(KelaileMotion.standard, easing = KelaileMotion.standardEasing),
+                                                    )
+                                                } else {
+                                                    locatePulse.snapTo(0f)
+                                                }
+                                            }
                                             val card = Modifier
                                                 .offset(x = laneW * pc.lane, y = with(density) { (cellH * pc.startIndex).toDp() })
                                                 .width(laneW)
                                                 .height(with(density) { (cellH * (pc.endIndex - pc.startIndex + 1)).toDp() })
                                                 .padding(1.dp)
                                                 .then(
-                                                    if (located) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, gridCellShape)
+                                                    if (located) Modifier
+                                                        .graphicsLayer {
+                                                            val boost = 1f + 0.03f * locatePulse.value
+                                                            scaleX = boost
+                                                            scaleY = boost
+                                                        }
+                                                        .border(
+                                                            (1.5f + 1.5f * locatePulse.value).dp,
+                                                            MaterialTheme.colorScheme.primary.copy(
+                                                                alpha = 0.5f + 0.5f * locatePulse.value,
+                                                            ),
+                                                            gridCellShape,
+                                                        )
                                                     else Modifier
                                                 )
                                                 .then(
@@ -949,10 +1059,14 @@ fun Timetable(
                                                         append('\n').append(course.teacher)
                                                     }
                                                 }
-                                                PressCard(
-                                                    { onCourse(course) }, card, style.background, gridCellShape,
-                                                    minHeight = 0.dp, contentPadding = 4.dp,
-                                                    contentAlignment = alignH, contentVerticalArrangement = alignV,
+                                                GlassCourseCard(
+                                                    onClick = { onCourse(course) },
+                                                    tint = style.background,
+                                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                                                    modifier = card,
+                                                    contentPadding = 5.dp,
+                                                    contentAlignment = alignH,
+                                                    contentVerticalArrangement = alignV,
                                                 ) {
                                                     Text(
                                                         course.name,
@@ -987,14 +1101,24 @@ fun Timetable(
 
                 dragging?.let { ghost ->
                     val ghostStyle = styles[ghost.course.id]
-                        ?: courseStyle(ghost.course, data.colors, s.defaultColor, surface)
+                        ?: courseVisual(ghost.course, data.colors, s.defaultColor, canvasColors.isDark)
                     Box(
                         Modifier
                             .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
                             .width(with(density) { cellW.toDp() })
                             .height(with(density) { (cellH * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
                             .padding(1.dp)
-                            .background(ghostStyle.background.copy(alpha = .92f), gridCellShape),
+                            .then(
+                                Modifier
+                                    .graphicsLayer { alpha = .92f }
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs))
+                                    .background(ghostStyle.background)
+                                    .border(
+                                        1.5.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = .55f),
+                                        androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                                    ),
+                            ),
                     )
                 }
                 dragSpot?.let { spot ->
@@ -1007,54 +1131,83 @@ fun Timetable(
                             ) }
                             .width(with(density) { cellW.toDp() })
                             .height(with(density) { cellH.toDp() })
-                            .border(2.dp, MaterialTheme.colorScheme.primary, gridCellShape),
+                            .padding(1.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = .16f),
+                                androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                            )
+                            .border(
+                                2.dp,
+                                MaterialTheme.colorScheme.primary,
+                                androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                            ),
                     )
                 }
             }
+            }
         }
 
-    LaunchedEffect(locatedCourseId, week, layout) {
+    LaunchedEffect(locatedCourseId, week) {
         val id = locatedCourseId ?: return@LaunchedEffect
-        if (boxW == 0 || viewportH == 0) return@LaunchedEffect
-        val bounds = layoutNow
-        val dayIndex = projectionNow.days.indexOfFirst { day ->
-            projectionNow.placed[day].orEmpty().any { it.course.id == id }
-        }
-        if (dayIndex < 0) return@LaunchedEffect
-        val placed = projectionNow.placed[projectionNow.days[dayIndex]].orEmpty().first { it.course.id == id }
-        gestureJob.launch(scope) {
-            if (grid.zoom < 1.6f) {
-                animateZoomTo(nearestZoomRung(1.8f), bounds.availW / 2f, bounds.availH / 2f)
+        var dayIndex = -1
+        val found = withTimeoutOrNull(1500L) {
+            var attempt = 0
+            while (attempt < 25) {
+                attempt += 1
+                if (boxW > 0 && viewportH > 0) {
+                    dayIndex = projectionNow.days.indexOfFirst { day ->
+                        projectionNow.placed[day].orEmpty().any { it.course.id == id }
+                    }
+                    if (dayIndex >= 0) return@withTimeoutOrNull true
+                }
+                delay(60)
             }
-            val cellWnow = bounds.cellWidth(grid.zoom)
-            val cellHnow = bounds.cellHeight(grid.zoom)
-            val targetX = (dayIndex + .5f) * cellWnow - bounds.availW / 2f
-            val targetY = (placed.startIndex + (placed.endIndex - placed.startIndex + 1) / 2f) * cellHnow -
-                bounds.availH / 2f
-            animate(
-                grid.offsetX, clampOffset(targetX, bounds.availW, bounds.contentWidth(grid.zoom)),
-                animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
-            ) { v, _ -> grid.offsetX = v }
-            animate(
-                grid.offsetY, clampOffset(targetY, bounds.availH, bounds.contentHeight(grid.zoom)),
-                animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
-            ) { v, _ -> grid.offsetY = v }
+            false
+        }
+        if (found != true) {
+            onLocateHandled()
+            return@LaunchedEffect
+        }
+        gestureJob.launch(scope) {
+            try {
+                val bounds = layoutNow
+                if (grid.zoom < 1.6f) {
+                    animateZoomTo(nearestZoomRung(1.8f), bounds.availW / 2f, bounds.availH / 2f)
+                }
+                val live = layoutNow
+                val placed = projectionNow.placed[projectionNow.days[dayIndex]].orEmpty().first { it.course.id == id }
+                val cellWnow = live.cellWidth(grid.zoom)
+                val cellHnow = live.cellHeight(grid.zoom)
+                val targetX = (dayIndex + .5f) * cellWnow - live.availW / 2f
+                val targetY = (placed.startIndex + (placed.endIndex - placed.startIndex + 1) / 2f) * cellHnow -
+                    live.availH / 2f
+                animate(
+                    grid.offsetX, clampOffset(targetX, live.availW, live.contentWidth(grid.zoom)),
+                    animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
+                ) { v, _ -> grid.offsetX = v }
+                animate(
+                    grid.offsetY, clampOffset(targetY, live.availH, live.contentHeight(grid.zoom)),
+                    animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing),
+                ) { v, _ -> grid.offsetY = v }
+                delay(1600)
+            } finally {
+                onLocateHandled()
+            }
         }
     }
-    if (pickerOpen) {
-        WeekPickerSheet(
-            settings = s,
-            viewWeek = week,
-            onPick = { onViewWeek(it); pickerOpen = false },
-            onLocate = { onViewWeek(s.currentWeek); pickerOpen = false },
-            onDismiss = { pickerOpen = false },
-        )
-    }
+    WeekPickerSheet(
+        open = pickerOpen,
+        settings = s,
+        viewWeek = week,
+        onPick = { onViewWeek(it); pickerOpen = false },
+        onLocate = { onViewWeek(s.currentWeek); pickerOpen = false },
+        onDismiss = { pickerOpen = false },
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeekPickerSheet(
+    open: Boolean,
     settings: AppSettings,
     viewWeek: Int,
     onPick: (Int) -> Unit,
@@ -1064,54 +1217,58 @@ private fun WeekPickerSheet(
     val state = rememberLazyListState(
         initialFirstVisibleItemIndex = (viewWeek - 2).coerceAtLeast(0),
     )
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(
-                settings.gradeLabel.ifBlank { "选择周次" },
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 32.dp),
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("选择周次", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "当前第 " + settings.currentWeek + " 周 · 共 " + settings.weekCount + " 周",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val canvas = LocalKelaileCanvas.current
+    GlassSheet(visible = open, onDismiss = onDismiss, title = "选择周次") {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        settings.gradeLabel.ifBlank { "本学期" },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "当前第 " + settings.currentWeek + " 周 · 共 " + settings.weekCount + " 周",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                GlassPillButton("回到当前周", onClick = onLocate, compact = true)
             }
-            TextButton(onClick = onLocate) { Text("回到当前周") }
-        }
-        LazyRow(
-            state = state,
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items((1..settings.weekCount).toList()) { w ->
-                FilterChip(
-                    selected = w == viewWeek,
-                    onClick = { onPick(w) },
-                    label = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "第 " + w + " 周",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (w == settings.currentWeek) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
+            LazyRow(
+                state = state,
+                contentPadding = PaddingValues(vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items((1..settings.weekCount).toList()) { w ->
+                    val selected = w == viewWeek
+                    Column(
+                        Modifier
+                            .clip(KelaileShapes.rounded(KelaileShapes.medium))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primary
+                                else canvas.fill,
                             )
-                            Text(WeekDates.rangeLabel(settings.start, w), style = MaterialTheme.typography.labelSmall)
-                        }
-                    },
-                )
+                            .clickable { onPick(w) }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            "第 $w 周",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary
+                            else if (w == settings.currentWeek) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            WeekDates.rangeLabel(settings.start, w),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(20.dp))
     }
 }

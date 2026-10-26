@@ -4,8 +4,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,16 +17,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -36,9 +35,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.xunyyds.kelaile.ui.glass.glassPanel
 
 @Composable
-fun CheckMark(selected: Boolean, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, size: Dp = 18.dp) {
+fun CheckMark(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    size: Dp = 18.dp,
+) {
     val progress by animateFloatAsState(
         if (selected) 1f else 0f,
         animationSpec = if (kelaileMotionEnabled()) {
@@ -68,33 +73,94 @@ fun CheckMark(selected: Boolean, modifier: Modifier = Modifier, color: Color = M
 }
 
 @Composable
-fun CheckRow(title: String, selected: Boolean, onClick: () -> Unit, subtitle: String = "") {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KelaileSpacing.hairline)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+fun CheckRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    subtitle: String = "",
+    showDivider: Boolean = false,
+) {
+    val canvas = LocalKelaileCanvas.current
+    Column(Modifier.fillMaxWidth()) {
+        if (showDivider) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .height(1.dp)
+                    .background(canvas.divider),
             )
-            if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.width(KelaileSpacing.md))
-        CheckMark(selected)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KelaileSpacing.hairline)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.width(KelaileSpacing.md))
+            CheckMark(selected)
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 选项面板：玻璃底部卡片 + 勾选行。
+ *
+ * 与设置页的 [Section] 共用圆角与描边体系，避免出现 Material 与 iOS 两种材质并存。
+ */
 @Composable
-fun ChoiceSheet(title: String, value: String, options: Map<String, String>, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            Spacer(Modifier.height(4.dp))
-            options.forEach { (key, label) -> CheckRow(label, key == value, onClick = { onSelect(key) }) }
+fun ChoiceSheet(
+    title: String,
+    value: String,
+    options: Map<String, String>,
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    val canvas = LocalKelaileCanvas.current
+    GlassSheet(
+        visible = visible,
+        onDismiss = onDismiss,
+        title = title,
+    ) {
+        Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(KelaileShapes.rounded(KelaileShapes.card))
+                    .glassPanel(
+                        KelaileShapes.rounded(KelaileShapes.card),
+                        canvas.fill,
+                        canvas.strokeTop,
+                        canvas.strokeBottom,
+                    ),
+            ) {
+                options.entries.forEachIndexed { index, (key, label) ->
+                    CheckRow(
+                        title = label,
+                        selected = key == value,
+                        showDivider = index > 0,
+                        onClick = { onSelect(key) },
+                    )
+                }
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -70,6 +73,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -80,10 +84,16 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.xunyyds.kelaile.core.prefs.SearchHistory
 import com.xunyyds.kelaile.data.AppData
+import com.xunyyds.kelaile.ui.KelaileElevation
 import com.xunyyds.kelaile.ui.KelaileGlyph
 import com.xunyyds.kelaile.ui.KelaileGlyphKind
 import com.xunyyds.kelaile.ui.KelaileMotion
 import com.xunyyds.kelaile.ui.KelaileShapes
+import com.xunyyds.kelaile.ui.KelaileSpacing
+import com.xunyyds.kelaile.ui.Section
+import com.xunyyds.kelaile.ui.SectionRow
+import com.xunyyds.kelaile.ui.LocalKelaileCanvas
+import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.ui.highlightMatches
 import com.xunyyds.kelaile.ui.palette.PaletteEntry
 import com.xunyyds.kelaile.ui.palette.PaletteKind
@@ -176,7 +186,6 @@ fun SharedTransitionScope.KelaileSearchOverlay(
             radius.snapTo(SearchPillRadius.value)
         }
     }
-    val barShape = RoundedCornerShape(radius.value.dp)
     val sharedBar = if (motion) {
         Modifier.sharedElementWithCallerManagedVisibility(
             rememberSharedContentState(SearchFieldKey),
@@ -193,7 +202,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier.matchParentSize()
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f * scrimAlpha.value))
+                    .background(LocalKelaileCanvas.current.scrim.copy(alpha = scrimAlpha.value))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -204,7 +213,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
             SearchPane(
                 query = query,
                 index = index,
-                shape = barShape,
+                radius = radius,
                 barModifier = sharedBar,
                 focusRequester = focusRequester,
                 history = history,
@@ -222,7 +231,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
 private fun SearchPane(
     query: MutableState<String>,
     index: SearchIndex,
-    shape: RoundedCornerShape,
+    radius: Animatable<Float, AnimationVector1D>,
     barModifier: Modifier,
     focusRequester: FocusRequester,
     history: SearchHistory,
@@ -239,48 +248,81 @@ private fun SearchPane(
     }
     val accent = MaterialTheme.colorScheme.primary
     val highlight = remember(accent) { SpanStyle(color = accent, fontWeight = FontWeight.Bold) }
+    val canvas = LocalKelaileCanvas.current
+    val fieldShape = RoundedCornerShape(radius.value.dp)
+    // 标题与搜索框合并进同一枚玻璃头卡：圆角随展开动画一起从胶囊收成直角
+    val headerShape = RoundedCornerShape(
+        topStart = radius.value.dp,
+        topEnd = radius.value.dp,
+        bottomStart = 0.dp,
+        bottomEnd = 0.dp,
+    )
     Column(Modifier.fillMaxSize().imePadding().semantics { paneTitle = "搜索" }) {
-        Surface(
-            modifier = barModifier.fillMaxWidth().statusBarsPadding(),
-            shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 0.dp,
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp)
+                .then(KelaileElevation.soft(10.dp, headerShape, 0.04f, 0.10f))
+                .glassPanel(headerShape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            SearchField(
-                query = query.value,
-                onQueryChange = { query.value = it },
-                onClear = { query.value = "" },
-                onSubmit = { result.entries.firstOrNull()?.let(onPick) },
-                onClose = onClose,
-                focusRequester = focusRequester,
-                shape = shape,
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "搜索",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.semantics { contentDescription = "关闭搜索" },
+                ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Box(
+                barModifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .clip(fieldShape)
+                    .background(canvas.fill.copy(alpha = 0.55f)),
+            ) {
+                SearchField(
+                    query = query.value,
+                    onQueryChange = { query.value = it },
+                    onClear = { query.value = "" },
+                    onSubmit = { result.entries.firstOrNull()?.let(onPick) },
+                    focusRequester = focusRequester,
+                    shape = fieldShape,
+                )
+            }
         }
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            ResultList(
-                query = query.value,
-                result = result,
-                terms = result.terms,
-                highlight = highlight,
-                historyItems = historyItems,
-                suggestions = suggestions,
-                onUseHistory = { query.value = it },
-                onRemoveHistory = {
-                    history.remove(it)
-                    onHistoryChange(history.items())
-                },
-                onClearHistory = {
-                    history.clear()
-                    onHistoryChange(history.items())
-                },
-                onPick = onPick,
-                onClear = { query.value = "" },
-                onClose = onClose,
-            )
-        }
+        ResultList(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 14.dp),
+            query = query.value,
+            result = result,
+            terms = result.terms,
+            highlight = highlight,
+            historyItems = historyItems,
+            suggestions = suggestions,
+            onUseHistory = { query.value = it },
+            onRemoveHistory = {
+                history.remove(it)
+                onHistoryChange(history.items())
+            },
+            onClearHistory = {
+                history.clear()
+                onHistoryChange(history.items())
+            },
+            onPick = onPick,
+            onClear = { query.value = "" },
+            onClose = onClose,
+        )
     }
 }
 
@@ -290,7 +332,6 @@ private fun SearchField(
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
     onSubmit: () -> Unit,
-    onClose: () -> Unit,
     focusRequester: FocusRequester,
     shape: RoundedCornerShape,
 ) {
@@ -312,7 +353,7 @@ private fun SearchField(
                     } else false
                 }
                 .semantics { contentDescription = "搜索框" },
-            placeholder = { Text("搜索课程、设置或动作") },
+            placeholder = { Text("课程、老师、教室或设置") },
             leadingIcon = {
                 KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
             },
@@ -348,16 +389,12 @@ private fun SearchField(
                 focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         )
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier.semantics { contentDescription = "关闭搜索" },
-        ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
 @Composable
 private fun ResultList(
+    modifier: Modifier = Modifier,
     query: String,
     result: SearchResult,
     terms: List<String>,
@@ -374,52 +411,117 @@ private fun ResultList(
     val entries = result.entries
     val grouped = remember(entries) { entries.groupBy { it.kind } }
     LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(KelaileSpacing.md),
     ) {
         if (terms.isEmpty()) {
             if (suggestions.isNotEmpty()) {
-                item(key = "suggest-header") { GroupHeader("建议搜索", 0, showCount = false) }
-                items(suggestions, key = { "sug:" + it.entry.id }) { suggestion ->
-                    SuggestionRow(suggestion) { onPick(suggestion.entry) }
+                item(key = "suggest-group") {
+                    Section("建议搜索") {
+                        suggestions.forEach { suggestion ->
+                            SectionRow {
+                                SearchLineRow(
+                                    entry = suggestion.entry,
+                                    title = suggestion.entry.title,
+                                    subtitle = suggestion.reason,
+                                    terms = emptyList(),
+                                    highlight = highlight,
+                                ) { onPick(suggestion.entry) }
+                            }
+                        }
+                    }
                 }
             }
-            item(key = "recent-header") { GroupHeader("最近搜索", 0, showCount = false) }
-            if (historyItems.isEmpty()) {
-                item(key = "recent-empty") {
-                    Text(
-                        "还没有搜索记录，试试“周次”或教师名",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
-            } else {
-                items(historyItems, key = { "history:" + it }) { entry ->
-                    HistoryRow(
-                        entry = entry,
-                        onUse = { onUseHistory(entry) },
-                        onRemove = { onRemoveHistory(entry) },
-                    )
-                }
-                item(key = "history-clear") {
-                    TextButton(onClick = onClearHistory, modifier = Modifier.fillMaxWidth()) {
-                        Text("清空搜索历史")
+            item(key = "recent-group") {
+                Section("最近搜索") {
+                    if (historyItems.isEmpty()) {
+                        SectionRow {
+                            Text(
+                                "还没有搜索记录，试试「周次」或教师名",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            )
+                        }
+                    } else {
+                        historyItems.forEach { entry ->
+                            SectionRow {
+                                Row(
+                                    Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(
+                                        Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clickable(
+                                                role = Role.Button,
+                                                onClickLabel = "使用这条搜索记录",
+                                                onClick = { onUseHistory(entry) },
+                                            )
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        KelaileGlyph(
+                                            KelaileGlyphKind.Search,
+                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(entry, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                                    }
+                                    Box(
+                                        Modifier
+                                            .size(48.dp)
+                                            .clickable(
+                                                role = Role.Button,
+                                                onClickLabel = "删除该条搜索历史",
+                                                onClick = { onRemoveHistory(entry) },
+                                            )
+                                            .semantics { contentDescription = "删除 " + entry },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        KelaileGlyph(
+                                            KelaileGlyphKind.Close,
+                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        SectionRow {
+                            TextButton(
+                                onClick = onClearHistory,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("清空搜索历史") }
+                        }
                     }
                 }
             }
         } else if (entries.isEmpty()) {
-            item(key = "empty") { EmptyState(query, onClear, onClose) }
+            item(key = "empty") {
+                Section("没有找到") {
+                    SectionRow { EmptyState(query, onClear, onClose) }
+                }
+            }
         } else {
             paletteKindOrder.forEach { kind ->
                 val group = grouped[kind].orEmpty()
                 if (group.isNotEmpty()) {
-                    item(key = "header:" + kind.name) {
-                        GroupHeader(kind.label, group.size, showCount = true)
-                    }
-                    items(group, key = { "e:" + it.id }) { entry ->
-                        ResultRow(entry, terms, highlight) { onPick(entry) }
+                    item(key = "group:" + kind.name) {
+                        Section("${kind.label} · ${group.size}") {
+                            group.forEach { entry ->
+                                SectionRow {
+                                    SearchLineRow(
+                                        entry = entry,
+                                        title = entry.title,
+                                        subtitle = entry.subtitle,
+                                        terms = terms,
+                                        highlight = highlight,
+                                    ) { onPick(entry) }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -427,103 +529,61 @@ private fun ResultList(
     }
 }
 
+/**
+ * 分组卡内的一行结果：类型徽标 + 主副标题，整行可点。
+ */
 @Composable
-private fun GroupHeader(title: String, count: Int, showCount: Boolean) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            title,
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (showCount) {
-            Text(
-                " · " + count,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
+private fun SearchLineRow(
+    entry: PaletteEntry,
+    title: String,
+    subtitle: String,
+    terms: List<String>,
+    highlight: SpanStyle,
+    onClick: () -> Unit,
+) {
+    val canvas = LocalKelaileCanvas.current
+    val highlighted = remember(title, terms, highlight) {
+        if (terms.isEmpty()) AnnotatedString(title) else highlightMatches(title, terms, highlight)
+    }
+    val subHighlighted = remember(subtitle, terms, highlight) {
+        if (subtitle.isBlank() || terms.isEmpty()) {
+            AnnotatedString(subtitle)
+        } else {
+            highlightMatches(subtitle, terms, highlight)
         }
     }
-}
-
-@Composable
-private fun ResultRow(entry: PaletteEntry, terms: List<String>, highlight: SpanStyle, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val title = remember(entry.title, terms, highlight) { highlightMatches(entry.title, terms, highlight) }
-    val subtitle = remember(entry.subtitle, terms, highlight) {
-        highlightMatches(entry.subtitle, terms, highlight)
-    }
     Row(
-        Modifier.fillMaxWidth()
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (subHighlighted.text.isBlank()) 54.dp else 68.dp)
             .clip(RoundedCornerShape(KelaileShapes.card))
-            .background(
-                if (pressed) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
-            )
-            .clickable(
-                interactionSource = interaction,
+            .selectable(
+                selected = false,
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Button,
                 onClick = onClick,
             )
-            .heightIn(min = if (subtitle.text.isBlank()) 52.dp else 68.dp)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         KindBadge(entry.kind)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-            if (subtitle.text.isNotBlank()) Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SuggestionRow(suggestion: Suggestion, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val entry = suggestion.entry
-    Row(
-        Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(KelaileShapes.card))
-            .background(
-                if (pressed) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        KindBadge(entry.kind)
-        Spacer(Modifier.width(12.dp))
-        Text(
-            entry.title,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        if (suggestion.reason.isNotBlank()) {
-            Spacer(Modifier.width(8.dp))
             Text(
-                suggestion.reason,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                highlighted,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (canvas.isDark) Color.White else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
             )
+            if (subHighlighted.text.isNotBlank()) {
+                Text(
+                    subHighlighted,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -543,49 +603,25 @@ private fun KindBadge(kind: PaletteKind) {
 }
 
 @Composable
-private fun HistoryRow(entry: String, onUse: () -> Unit, onRemove: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.weight(1f).heightIn(min = 52.dp)
-                .clickable(role = Role.Button, onClickLabel = "使用这条搜索记录", onClick = onUse)
-                .padding(start = 10.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            KelaileGlyph(KelaileGlyphKind.Search, MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(12.dp))
-            Text(entry, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-        }
-        Box(
-            Modifier.size(48.dp).clickable(
-                role = Role.Button,
-                onClickLabel = "删除该条搜索历史",
-                onClick = onRemove,
-            ).semantics { contentDescription = "删除 " + entry },
-            contentAlignment = Alignment.Center,
-        ) { KelaileGlyph(KelaileGlyphKind.Close, MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-}
-
-@Composable
 private fun EmptyState(query: String, onClear: () -> Unit, onClose: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 28.dp),
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             buildAnnotatedString {
-                append("没有找到「")
+                append("「")
                 withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)) {
                     append(query.trim())
                 }
-                append("」相关内容")
+                append("」没有匹配")
             },
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.semantics { contentDescription = "没有找到 " + query.trim() + " 相关内容" },
         )
         Text(
-            "换个教师名、教室号，或试试“周次”“导出”",
+            "换个教师名、教室号，或试试「周次」「导出」",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
