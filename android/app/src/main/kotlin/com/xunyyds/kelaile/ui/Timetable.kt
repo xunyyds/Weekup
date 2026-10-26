@@ -113,6 +113,9 @@ internal fun projectWeek(
 internal fun clock(minutes: Int): String =
     (minutes / 60).toString().padStart(2, '0') + ":" + (minutes % 60).toString().padStart(2, '0')
 
+/** 字号量化到 0.5sp 一档，避免捏合时文本每帧重新排版造成抖动。 */
+internal fun quantizeSp(size: Float): Float = (size * 2f).roundToInt() / 2f
+
 /**
  * 课表配色。各项都允许「跟随主题」：值为 [GRID_COLOR_AUTO] 时回退到当前 Material 配色，
  * 因此新增设置不会改变默认观感，深色与浅色主题都自然成立。
@@ -309,6 +312,10 @@ fun Timetable(
     val zoom = grid.zoom
     val cellW = layout.cellWidth(zoom)
     val cellH = layout.cellHeight(zoom)
+    // 布局尺寸一律取整像素：格子、卡片、虚线共用同一套整数步长，
+    // 否则浮点 cellW 逐列累积半像素，网格线会和格子边缘错位。
+    val cellWpx = cellW.roundToInt().coerceAtLeast(1)
+    val cellHpx = cellH.roundToInt().coerceAtLeast(1)
 
     val layoutNow by rememberUpdatedState(layout)
     val weekNow by rememberUpdatedState(week)
@@ -430,7 +437,7 @@ fun Timetable(
         return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
     }
 
-    /** 按下点是否落在一张有课卡片上：只有有课才武装长按进编辑，空白格长按不再误触。 */
+    /** 按下点是否落在一张有课卡片上：只有有课才允许武装长按进编辑，空白格长按不再误触。 */
     fun courseAt(x: Float, y: Float): Boolean {
         val bounds = layoutNow
         if (x < bounds.gutterPx || y < bounds.headerPx) return false
@@ -774,7 +781,7 @@ fun Timetable(
                                 val isBlockEnd = group == null || group.endIndex == rowIndex
                                 val marked = editMode && rowFrom != 0 && (rowTo == rowIndex || rowFrom - 1 == rowIndex)
                                 Box(
-                                    Modifier.height(with(density) { cellH.toDp() }).fillMaxWidth()
+                                    Modifier.height(with(density) { cellHpx.toDp() }).fillMaxWidth()
                                         .then(
                                             if (marked) Modifier.background(
                                                 MaterialTheme.colorScheme.primary.copy(alpha = .18f),
@@ -782,13 +789,13 @@ fun Timetable(
                                             ) else Modifier
                                         )
                                         .then(
-                                            if (!editMode) Modifier else Modifier.pointerInput(rowIndex, cellH) {
+                                            if (!editMode) Modifier else Modifier.pointerInput(rowIndex, cellHpx) {
                                                 detectDragGestures(
                                                     onDragStart = { rowFrom = rowIndex + 1; rowTo = rowIndex; rowDrag = 0f },
                                                     onDrag = { change, delta ->
                                                         change.consume()
                                                         rowDrag += delta.y
-                                                        rowTo = (rowIndex + (rowDrag / cellH).roundToInt())
+                                                        rowTo = (rowIndex + (rowDrag / cellHpx).roundToInt())
                                                             .coerceIn(0, periodCount - 1)
                                                     },
                                                     onDragEnd = {
@@ -802,7 +809,7 @@ fun Timetable(
                                         ),
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
-                                    val gutterDp = with(density) { cellH.toDp().value }
+                                    val gutterDp = with(density) { cellHpx.toDp().value }
                                     val periodSize = (gutterDp / 5.6f).coerceIn(9f, 12f).sp
                                     val clockSize = (gutterDp / 9.2f).coerceIn(7f, 9f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -841,7 +848,6 @@ fun Timetable(
                     }
                     Column(Modifier.weight(1f)) {
 
-                        val cellWpx = cellW.roundToInt().coerceAtLeast(1)
                         val cellDp = with(density) { cellWpx.toDp() }
                         val contentW = with(density) { (cellWpx * dayCount).toDp() }
                         Box(Modifier.fillMaxWidth().height(dayHeaderHeight).clipToBounds()) {
@@ -860,13 +866,13 @@ fun Timetable(
                                             ) else Modifier
                                         )
                                         .then(
-                                            if (!editMode) Modifier else Modifier.pointerInput(dayIndex, cellW) {
+                                            if (!editMode) Modifier else Modifier.pointerInput(dayIndex, cellWpx) {
                                                 detectDragGestures(
                                                     onDragStart = { columnFrom = dayIndex + 1; columnTo = dayIndex; colDrag = 0f },
                                                     onDrag = { change, delta ->
                                                         change.consume()
                                                         colDrag += delta.x
-                                                        columnTo = (dayIndex + (colDrag / cellW).roundToInt())
+                                                        columnTo = (dayIndex + (colDrag / cellWpx).roundToInt())
                                                             .coerceIn(0, dayCount - 1)
                                                     },
                                                     onDragEnd = {
@@ -915,13 +921,13 @@ fun Timetable(
                                 DashedGridLines(
                                     columns = dayCount,
                                     rows = periodCount,
-                                    cellW = cellW,
-                                    cellH = cellH,
+                                    cellW = cellWpx.toFloat(),
+                                    cellH = cellHpx.toFloat(),
                                     color = palette.line,
                                     modifier = Modifier
                                         .offset { IntOffset((-grid.offsetX).roundToInt(), (-grid.offsetY).roundToInt()) }
-                                        .requiredWidth(with(density) { (cellW * dayCount).toDp() })
-                                        .requiredHeight(with(density) { (cellH * periodCount).toDp() }),
+                                        .requiredWidth(with(density) { (cellWpx * dayCount).toDp() })
+                                        .requiredHeight(with(density) { (cellHpx * periodCount).toDp() }),
                                 )
                             }
 
@@ -944,7 +950,7 @@ fun Timetable(
                                             repeat(periodCount) {
                                                 Box(
                                                     Modifier
-                                                        .height(with(density) { cellH.toDp() })
+                                                        .height(with(density) { cellHpx.toDp() })
                                                         .fillMaxWidth()
                                                         .padding(gridCellPadding(palette.lineStyle))
                                                         .background(
@@ -958,20 +964,21 @@ fun Timetable(
                                             DashedGridLines(
                                                 columns = 1,
                                                 rows = periodCount,
-                                                cellW = cellW,
-                                                cellH = cellH,
+                                                cellW = cellWpx.toFloat(),
+                                                cellH = cellHpx.toFloat(),
                                                 color = palette.line,
                                                 modifier = Modifier.fillMaxSize(),
                                             )
                                         }
                                         projection.placed[day].orEmpty().forEach { pc ->
                                             val course = pc.course
-                                            val laneW = with(density) { (cellW / pc.laneCount).toDp() }
+                                            val laneW = with(density) { (cellWpx / pc.laneCount).toDp() }
                                             val style = styles[course.id]
                                                 ?: courseVisual(course, data.colors, s.defaultColor, canvasColors.isDark)
                                             val located = locatedCourseId == course.id
                                             val locatePulse = remember { Animatable(0f) }
                                             LaunchedEffect(located) {
+                                                // 只在命中时驱动动画：非命中卡片不写状态，避免多余重组
                                                 if (located) {
                                                     locatePulse.animateTo(
                                                         1f,
@@ -981,14 +988,12 @@ fun Timetable(
                                                         0.55f,
                                                         tween(KelaileMotion.standard, easing = KelaileMotion.standardEasing),
                                                     )
-                                                } else {
-                                                    locatePulse.snapTo(0f)
                                                 }
                                             }
                                             val card = Modifier
-                                                .offset(x = laneW * pc.lane, y = with(density) { (cellH * pc.startIndex).toDp() })
+                                                .offset(x = laneW * pc.lane, y = with(density) { (cellHpx * pc.startIndex).toDp() })
                                                 .width(laneW)
-                                                .height(with(density) { (cellH * (pc.endIndex - pc.startIndex + 1)).toDp() })
+                                                .height(with(density) { (cellHpx * (pc.endIndex - pc.startIndex + 1)).toDp() })
                                                 .padding(1.dp)
                                                 .then(
                                                     if (located) Modifier
@@ -1007,13 +1012,13 @@ fun Timetable(
                                                     else Modifier
                                                 )
                                                 .then(
-                                                    if (!editMode) Modifier else Modifier.pointerInput(course.id, cellW) {
+                                                    if (!editMode) Modifier else Modifier.pointerInput(course.id, cellWpx) {
                                                         detectDragGestures(
                                                             onDragStart = { local ->
                                                                 dragging = pc
                                                                 dragAt = Offset(
-                                                                    gutterPx + dayIndex * cellW - grid.offsetX + local.x,
-                                                                    headerPx + pc.startIndex * cellH - grid.offsetY + local.y,
+                                                                    gutterPx + dayIndex * cellWpx - grid.offsetX + local.x,
+                                                                    headerPx + pc.startIndex * cellHpx - grid.offsetY + local.y,
                                                                 )
                                                                 dragSpot = day to pc.startIndex
                                                             },
@@ -1039,8 +1044,10 @@ fun Timetable(
                                                     }
                                                 )
 
-                                            val cardDp = with(density) { cellW.toDp().value }
-                                            val cardSize = (cardDp / 7.2f).coerceIn(7f, 12f).sp
+                                            val cardDp = with(density) { cellWpx.toDp().value }
+                                            // 字号量化到 0.5sp：捏合时文本只在跨档才重排，不再逐帧抖动
+                                            val cardSize = quantizeSp((cardDp / 7.2f).coerceIn(7f, 12f)).sp
+                                            val metaSize = quantizeSp(cardSize.value * .82f).sp
                                             val textAlign = when (s.cellTextAlign) {
                                                 "center" -> androidx.compose.ui.text.style.TextAlign.Center
                                                 "end" -> androidx.compose.ui.text.style.TextAlign.End
@@ -1092,8 +1099,8 @@ fun Timetable(
                                                     Text(
                                                         meta,
                                                         color = style.ink.copy(alpha = .85f),
-                                                        fontSize = cardSize * .82f,
-                                                        lineHeight = cardSize * .95f,
+                                                        fontSize = metaSize,
+                                                        lineHeight = metaSize * 1.15f,
                                                         maxLines = 4,
                                                         textAlign = textAlign,
                                                         modifier = Modifier.fillMaxWidth(),
@@ -1115,8 +1122,8 @@ fun Timetable(
                     Box(
                         Modifier
                             .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
-                            .width(with(density) { cellW.toDp() })
-                            .height(with(density) { (cellH * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
+                            .width(with(density) { cellWpx.toDp() })
+                            .height(with(density) { (cellHpx * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
                             .padding(1.dp)
                             .then(
                                 Modifier
@@ -1136,11 +1143,11 @@ fun Timetable(
                     if (spotIndex >= 0) Box(
                         Modifier
                             .offset { IntOffset(
-                                (gutterPx + spotIndex * cellW - grid.offsetX).roundToInt(),
-                                (headerPx + spot.second * cellH - grid.offsetY).roundToInt(),
+                                (gutterPx + spotIndex * cellWpx - grid.offsetX).roundToInt(),
+                                (headerPx + spot.second * cellHpx - grid.offsetY).roundToInt(),
                             ) }
-                            .width(with(density) { cellW.toDp() })
-                            .height(with(density) { cellH.toDp() })
+                            .width(with(density) { cellWpx.toDp() })
+                            .height(with(density) { cellHpx.toDp() })
                             .padding(1.dp)
                             .background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = .16f),
