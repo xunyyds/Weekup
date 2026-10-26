@@ -198,15 +198,19 @@ fun SharedTransitionScope.SettingsPage(
 
     Column(Modifier.fillMaxSize()) {
         if (atRoot) {
-            KelaileTopBar(
-                title = "设置",
-                subtitle = "外观、课表与数据",
-                collapseFraction = (scroll.value.toFloat() / SETTINGS_COLLAPSE_PX).coerceIn(0f, 1f),
+            // 根页标题不再套玻璃胶囊：大标题裸放在壁纸上，层级更清楚
+            Text(
+                "设置",
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, top = 10.dp, bottom = 2.dp),
+                style = MaterialTheme.typography.displaySmall,
             )
             KelaileSearchPill(
                 collapsed = !searchExpanded,
                 onOpen = onSearch,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 2.dp, bottom = 8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp),
             )
         } else {
             SettingsSubHeader(title = current.title, onBack = ::back)
@@ -565,8 +569,6 @@ private val Route.parent: Route
     }
 
 private val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
-
-private const val SETTINGS_COLLAPSE_PX = 6f
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
