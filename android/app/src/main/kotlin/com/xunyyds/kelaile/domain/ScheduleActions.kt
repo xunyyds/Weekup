@@ -17,7 +17,7 @@ object ScheduleActions {
         require(imported.courses.isNotEmpty()) { "没有可导入的课程" }
         val count=maxOf(imported.weekCount ?: data.settings.weekCount,imported.courses.maxOf { it.weeks.max() })
 
-        val periods=if(imported.periods.isEmpty())data.settings.periods else run {
+        val rawPeriods=if(imported.periods.isEmpty())data.settings.periods else run {
             val base=imported.periods.sortedBy { it.period }
             val used=base.map { it.period }.toSet()
             val ceiling=base.maxOf { it.period }
@@ -27,10 +27,19 @@ object ScheduleActions {
                 .sortedBy { it.startMinutes }
             base+extra.mapIndexed { index, period -> period.copy(period=ceiling+1+index) }
         }
+        // 站点/本地编号本身也可能跳号（例如晚自习直接标 18 起），统一压成从 1 连续，
+        // 课程引用同步换号，课表节次栏才不会 10 之后凭空跳到 18。
+        val ordered=rawPeriods.sortedWith(compareBy({ it.startMinutes }, { it.period }))
+        val renumber=ordered.mapIndexed { index, period -> period.period to (index + 1) }.toMap()
+        val periods=ordered.mapIndexed { index, period -> period.copy(period=index+1) }
+        fun remap(p: Int): Int = renumber[p] ?: p.coerceIn(1, periods.size)
         return data.copy(settings=data.settings.copy(
             school=imported.school?.takeIf { it.isNotBlank() } ?: data.settings.school,
             weekCount=count,currentWeek=(imported.currentWeek ?: data.settings.currentWeek).coerceIn(1,count),periods=periods,
-        ),courses=imported.courses,colors=emptyMap())
+        ),courses=imported.courses.map { it.copy(
+            startPeriod=remap(it.startPeriod),
+            endPeriod=maxOf(remap(it.startPeriod),remap(it.endPeriod)),
+        ) },colors=emptyMap())
     }
 
     enum class MoveMode { SWAP, OVERWRITE }
