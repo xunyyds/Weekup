@@ -962,7 +962,7 @@ fun Timetable(
                                         }
                                         if (palette.lineStyle == GRID_LINE_DASHED) {
                                             DashedGridLines(
-                                                columns = 1,
+                                                columns = 0,
                                                 rows = periodCount,
                                                 cellW = cellWpx.toFloat(),
                                                 cellH = cellHpx.toFloat(),
