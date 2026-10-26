@@ -430,6 +430,16 @@ fun Timetable(
         return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
     }
 
+    /** 按下点是否落在一张有课卡片上：只有有课才武装长按进编辑，空白格长按不再误触。 */
+    fun courseAt(x: Float, y: Float): Boolean {
+        val bounds = layoutNow
+        if (x < bounds.gutterPx || y < bounds.headerPx) return false
+        val col = bounds.columnAt(x, grid.offsetX, grid.zoom)
+        val row = bounds.rowAt(y, grid.offsetY, grid.zoom)
+        val day = projectionNow.days.getOrNull(col) ?: return false
+        return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
+    }
+
     Column(Modifier.fillMaxSize()) {
         KelaileTopBar(
             title = "",
@@ -574,7 +584,7 @@ fun Timetable(
                             velocityTracker.resetTracking()
                             velocityTracker.addPosition(down.uptimeMillis, down.position)
 
-                            longPressArmed = !editMode
+                            longPressArmed = !editMode && courseAt(down.position.x, down.position.y)
 
                             var pinched = false
                             var started = false
