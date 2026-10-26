@@ -61,7 +61,6 @@ fun shareInstalledApk(context: Context) = ApkSharing.shareInstalledApk(context)
 @Composable
 fun AboutContent(update: UpdateController) {
     val context = LocalContext.current
-    val canvas = LocalKelaileCanvas.current
     var licenses by remember { mutableStateOf<String?>(null) }
     var info by remember(context) { mutableStateOf<AppMetadata?>(null) }
     var logo by remember(context) { mutableStateOf<ImageBitmap?>(null) }
@@ -189,8 +188,6 @@ fun AboutContent(update: UpdateController) {
                 AppPlatform.openLink(context, AppLinks.ANDROID_LIQUID_GLASS)
             }
         }
-        SettingsFooterPhrase("课程与设置仅存于本机。教务登录由系统 WebView 处理，不收集或上传登录凭据。")
-        if (canvas.isDark) Spacer(Modifier.size(0.dp))
     }
 }
 
