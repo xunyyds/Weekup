@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         setContent {
             val view = LocalView.current
@@ -29,10 +29,5 @@ class MainActivity : ComponentActivity() {
             }
             KelaileApp()
         }
-    }
-
-    private companion object {
-        const val LIGHT_SCRIM = 0xE6F2F5FA.toInt()
-        const val DARK_SCRIM = 0xE60B0F16.toInt()
     }
 }
