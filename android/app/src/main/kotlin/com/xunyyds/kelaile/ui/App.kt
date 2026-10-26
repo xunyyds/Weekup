@@ -147,7 +147,14 @@ fun KelaileApp() {
     }
     LaunchedEffect(Unit) {
         try {
-            data = service.load()
+            var loaded = service.load()
+            // 老数据里节次可能跳号（10 后直接 18），加载时压成连续并落盘一次
+            val normalized = ScheduleActions.normalizePeriods(loaded)
+            if (normalized != loaded) {
+                loaded = normalized
+                runCatching { service.save(normalized) }
+            }
+            data = loaded
             val settings = data.settings
             if (startupError == null) {
                 val derived = com.xunyyds.kelaile.data.WeekDates

@@ -88,4 +88,29 @@ class ScheduleActionsImportTest {
             periods.map { it.period },
         )
     }
+
+    @Test fun legacyGappedPeriodsSelfHealOnNormalize() {
+        val legacy = AppData().copy(
+            settings = AppData().settings.copy(
+                periods = (1..10).map { PeriodTime(it, 480 + (it - 1) * 55, 480 + (it - 1) * 55 + 45) } +
+                    listOf(PeriodTime(18, 1300, 1345), PeriodTime(19, 1350, 1395)),
+            ),
+            courses = listOf(
+                CourseSession("e", "晚自习", 1, 18, 19, (1..20).toList(), "", ""),
+            ),
+        )
+        val result = ScheduleActions.normalizePeriods(legacy)
+        assertEquals(
+            "10 之后凭空跳到的 18/19 应被压成 11/12",
+            (1..12).toList(),
+            result.settings.periods.map { it.period },
+        )
+        assertEquals("课程节次引用同步换号", 11, result.courses.single().startPeriod)
+        assertEquals("课程节次引用同步换号", 12, result.courses.single().endPeriod)
+    }
+
+    @Test fun alreadySequentialPeriodsAreLeftUntouched() {
+        val ok = local()
+        assertEquals("已连续时原样返回", ok, ScheduleActions.normalizePeriods(ok))
+    }
 }

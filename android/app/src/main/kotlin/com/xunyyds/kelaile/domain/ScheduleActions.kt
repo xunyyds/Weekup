@@ -27,19 +27,35 @@ object ScheduleActions {
                 .sortedBy { it.startMinutes }
             base+extra.mapIndexed { index, period -> period.copy(period=ceiling+1+index) }
         }
-        // 站点/本地编号本身也可能跳号（例如晚自习直接标 18 起），统一压成从 1 连续，
-        // 课程引用同步换号，课表节次栏才不会 10 之后凭空跳到 18。
-        val ordered=rawPeriods.sortedWith(compareBy({ it.startMinutes }, { it.period }))
-        val renumber=ordered.mapIndexed { index, period -> period.period to (index + 1) }.toMap()
-        val periods=ordered.mapIndexed { index, period -> period.copy(period=index+1) }
-        fun remap(p: Int): Int = renumber[p] ?: p.coerceIn(1, periods.size)
-        return data.copy(settings=data.settings.copy(
+        return normalizePeriods(data.copy(settings=data.settings.copy(
             school=imported.school?.takeIf { it.isNotBlank() } ?: data.settings.school,
-            weekCount=count,currentWeek=(imported.currentWeek ?: data.settings.currentWeek).coerceIn(1,count),periods=periods,
-        ),courses=imported.courses.map { it.copy(
-            startPeriod=remap(it.startPeriod),
-            endPeriod=maxOf(remap(it.startPeriod),remap(it.endPeriod)),
-        ) },colors=emptyMap())
+            weekCount=count,currentWeek=(imported.currentWeek ?: data.settings.currentWeek).coerceIn(1,count),periods=rawPeriods,
+        ),courses=imported.courses,colors=emptyMap()))
+    }
+
+    /**
+     * 把节次编号压成从 1 连续（按上课时间排序），并同步换掉课程里的节次引用。
+     *
+     * 站点/本地编号本身也可能跳号（例如晚自习直接标 18 起），不压就会在课表节次栏
+     * 出现「10 之后凭空跳到 18」。已经是连续 1..n 时原样返回，可安全地在每次加载时调用。
+     */
+    fun normalizePeriods(data: AppData): AppData {
+        val periods = data.settings.periods
+        if (periods.isEmpty()) return data
+        val ordered = periods.sortedWith(compareBy({ it.startMinutes }, { it.period }))
+        val alreadySequential = ordered.mapIndexed { index, period -> period.period == index + 1 }.all { it }
+        if (alreadySequential) return data
+        val renumber = ordered.mapIndexed { index, period -> period.period to (index + 1) }
+            .toMap()
+        val normalized = ordered.mapIndexed { index, period -> period.copy(period = index + 1) }
+        fun remap(p: Int): Int = renumber[p] ?: p.coerceIn(1, normalized.size)
+        return data.copy(
+            settings = data.settings.copy(periods = normalized),
+            courses = data.courses.map { it.copy(
+                startPeriod = remap(it.startPeriod),
+                endPeriod = maxOf(remap(it.startPeriod), remap(it.endPeriod)),
+            ) },
+        )
     }
 
     enum class MoveMode { SWAP, OVERWRITE }
