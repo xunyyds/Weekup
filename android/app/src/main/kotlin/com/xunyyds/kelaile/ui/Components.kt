@@ -1020,6 +1020,7 @@ enum class KelaileGlyphKind {
     Search, Close, Back,
     Palette, Monitor, Calendar, Book, Bell, Database, Info,
     Brush, Layout, Speed, Clock, Tag, Image, Link, Check, Plus,
+    Code, Bug, Heart, Balance, Doc,
 }
 
 @Composable
@@ -1150,6 +1151,70 @@ fun KelaileGlyph(
             KelaileGlyphKind.Plus -> {
                 drawLine(tint, Offset(12f * u, 5f * u), Offset(12f * u, 19f * u), pen.width, StrokeCap.Round)
                 drawLine(tint, Offset(5f * u, 12f * u), Offset(19f * u, 12f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Code -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(9f * u, 6f * u); lineTo(4f * u, 12f * u); lineTo(9f * u, 18f * u)
+                    },
+                    tint, style = pen,
+                )
+                drawPath(
+                    Path().apply {
+                        moveTo(15f * u, 6f * u); lineTo(20f * u, 12f * u); lineTo(15f * u, 18f * u)
+                    },
+                    tint, style = pen,
+                )
+            }
+            KelaileGlyphKind.Bug -> {
+                drawRoundRect(tint, Offset(7.5f * u, 8f * u), Size(9f * u, 11f * u), CornerRadius(4.5f * u), style = pen)
+                drawLine(tint, Offset(9f * u, 6.5f * u), Offset(11f * u, 8f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(15f * u, 6.5f * u), Offset(13f * u, 8f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(7.5f * u, 12f * u), Offset(3.5f * u, 10.5f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(7.5f * u, 15f * u), Offset(4f * u, 16.5f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(16.5f * u, 12f * u), Offset(20.5f * u, 10.5f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(16.5f * u, 15f * u), Offset(20f * u, 16.5f * u), pen.width, StrokeCap.Round)
+            }
+            KelaileGlyphKind.Heart -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(12f * u, 19.5f * u)
+                        cubicTo(4.5f * u, 14f * u, 4.5f * u, 8.5f * u, 8f * u, 6.5f * u)
+                        cubicTo(10f * u, 5.4f * u, 12f * u, 7f * u, 12f * u, 8.6f * u)
+                        cubicTo(12f * u, 7f * u, 14f * u, 5.4f * u, 16f * u, 6.5f * u)
+                        cubicTo(19.5f * u, 8.5f * u, 19.5f * u, 14f * u, 12f * u, 19.5f * u)
+                        close()
+                    },
+                    tint, style = pen,
+                )
+            }
+            KelaileGlyphKind.Balance -> {
+                drawLine(tint, Offset(12f * u, 4f * u), Offset(12f * u, 20f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(5f * u, 20f * u), Offset(19f * u, 20f * u), pen.width, StrokeCap.Round)
+                drawLine(tint, Offset(4.5f * u, 7f * u), Offset(19.5f * u, 7f * u), pen.width, StrokeCap.Round)
+                drawArc(
+                    tint, 180f, 180f, useCenter = false,
+                    topLeft = Offset(2.5f * u, 7f * u), size = Size(4.6f * u, 4.6f * u), style = pen,
+                )
+                drawArc(
+                    tint, 180f, 180f, useCenter = false,
+                    topLeft = Offset(16.9f * u, 7f * u), size = Size(4.6f * u, 4.6f * u), style = pen,
+                )
+            }
+            KelaileGlyphKind.Doc -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(6f * u, 3.5f * u); lineTo(14f * u, 3.5f * u); lineTo(18f * u, 7.5f * u)
+                        lineTo(18f * u, 20.5f * u); lineTo(6f * u, 20.5f * u); close()
+                    },
+                    tint, style = pen,
+                )
+                drawPath(
+                    Path().apply {
+                        moveTo(14f * u, 3.5f * u); lineTo(14f * u, 7.5f * u); lineTo(18f * u, 7.5f * u)
+                    },
+                    tint, style = pen,
+                )
             }
         }
     }

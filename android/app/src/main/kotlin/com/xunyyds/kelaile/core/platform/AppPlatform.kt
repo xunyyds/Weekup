@@ -49,6 +49,11 @@ object AppPlatform {
         }.getOrDefault("无法读取许可，请访问上游项目。")
     }
 
+    fun readLicenseSync(context: Context): String = runCatching {
+        context.applicationContext.assets.open("licenses/AndroidLiquidGlass-Apache-2.0.txt")
+            .bufferedReader().use { it.readText() }
+    }.getOrDefault("无法读取许可，请访问上游项目。")
+
     fun openLink(context: Context, url: String) {
         runCatching {
             val uri = Uri.parse(url)
