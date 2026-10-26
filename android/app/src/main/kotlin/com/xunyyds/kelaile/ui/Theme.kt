@@ -107,12 +107,15 @@ data class KelaileCanvas(
     val fill: Color,
     val fillElevated: Color,
     val fillSunken: Color,
+    val sheetFill: Color,
     val strokeTop: Color,
     val strokeBottom: Color,
     val divider: Color,
     val scrim: Color,
     val isDark: Boolean,
 )
+
+internal val LocalDialogBlur = staticCompositionLocalOf { true }
 
 internal val LocalKelaileCanvas = staticCompositionLocalOf {
     KelaileCanvas(
@@ -123,6 +126,7 @@ internal val LocalKelaileCanvas = staticCompositionLocalOf {
         fill = Color.White.copy(alpha = 0.62f),
         fillElevated = Color.White.copy(alpha = 0.74f),
         fillSunken = Color(0xFF12161F).copy(alpha = 0.05f),
+        sheetFill = Color(0xFFF5F7FB),
         strokeTop = Color.White.copy(alpha = 0.92f),
         strokeBottom = Color.White.copy(alpha = 0.28f),
         divider = Color(0xFF1B2230).copy(alpha = 0.07f),
@@ -179,6 +183,7 @@ internal fun kelaileCanvas(palette: String, dark: Boolean, accent: Color): Kelai
             fill = Color.White.copy(alpha = 0.055f),
             fillElevated = Color.White.copy(alpha = 0.09f),
             fillSunken = Color.Black.copy(alpha = 0.18f),
+            sheetFill = Color(0xFF151B26),
             strokeTop = Color.White.copy(alpha = 0.16f),
             strokeBottom = Color.White.copy(alpha = 0.03f),
             divider = Color.White.copy(alpha = 0.08f),
@@ -194,6 +199,7 @@ internal fun kelaileCanvas(palette: String, dark: Boolean, accent: Color): Kelai
             fill = Color.White.copy(alpha = 0.62f),
             fillElevated = Color.White.copy(alpha = 0.74f),
             fillSunken = Color(0xFF12161F).copy(alpha = 0.05f),
+            sheetFill = Color(0xFFF5F7FB),
             strokeTop = Color.White.copy(alpha = 0.95f),
             strokeBottom = Color.White.copy(alpha = 0.30f),
             divider = Color(0xFF1B2230).copy(alpha = 0.07f),
@@ -302,6 +308,8 @@ fun KelaileTheme(
     motionSpeed: Double = 1.0,
     reduceMotion: Boolean = false,
     transitionStyle: String = "shared",
+    dialogBlur: Boolean = true,
+    powerSaverMotion: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val dark = when (theme.lowercase()) {
@@ -335,7 +343,9 @@ fun KelaileTheme(
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val multiplier = if (fontScale.isFinite()) fontScale.coerceIn(0.5f, 2f) else 1f
-    val enabled = systemMotionEnabled()
+    val systemMotion = systemMotionEnabled()
+    val powerSaver = powerSaveModeActive()
+    val enabled = systemMotion && (!powerSaver || !powerSaverMotion)
     val canvas = remember(palette, dark, effectiveScheme.primary, dynamicColor) {
         kelaileCanvas(palette, dark, effectiveScheme.primary)
     }
@@ -355,6 +365,7 @@ fun KelaileTheme(
         LocalKelaileMotionEnabled provides (enabled && !reduceMotion),
         LocalMotionSpeed provides motionSpeed.coerceIn(.5, 2.0),
         LocalTransitionStyle provides transitionStyle,
+        LocalDialogBlur provides dialogBlur,
         LocalKelaileCanvas provides canvas,
     ) {
         MaterialTheme(

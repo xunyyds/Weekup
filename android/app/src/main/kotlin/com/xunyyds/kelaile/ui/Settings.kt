@@ -347,6 +347,8 @@ fun SharedTransitionScope.SettingsPage(
                             )
                             SettingsSwitch("减少动画", "减少位移与缩放，使用更平静的切换", s.reduceMotion) { applySettings { s.copy(reduceMotion = it) } }
                             ChoiceSetting("转场风格", s.transitionStyle, linkedMapOf("standard" to "标准", "shared" to "共享轴", "fade" to "淡入淡出")) { applySettings { s.copy(transitionStyle = it) } }
+                            SettingsSwitch("弹窗背景模糊", "弹出选择框和确认框时对下层内容实时模糊", s.dialogBlur) { applySettings { s.copy(dialogBlur = it) } }
+                            SettingsSwitch("省电模式", "检测到系统省电模式时自动减少动画", s.powerSaverMotion) { applySettings { s.copy(powerSaverMotion = it) } }
                         }
                         Route.Semester -> Section("学期与课表") {
                             SettingsItem("学校名称", s.school.ifBlank { "导入时自动识别，失败后再填写" }) { text("学校名称", s.school) { applySettings { s.copy(school = it.trim()) } } }

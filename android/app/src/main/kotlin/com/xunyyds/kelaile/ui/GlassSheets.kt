@@ -54,12 +54,18 @@ import androidx.compose.ui.window.DialogWindowProvider
 import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.ui.glass.glassSheen
 
+@Composable
+internal fun kelaileDialogBlurEnabled(): Boolean =
+    LocalDialogBlur.current && android.os.Build.VERSION.SDK_INT >= 31
+
 /**
  * 全屏透明浮层宿主。
  *
  * 用 Dialog 承载而不是内联 Box：对话框是独立窗口，无论浮层被写在多深的
  * 滚动容器里（例如设置页的分组卡片内部）都能正确盖住整页，也自带返回键语义。
- * 平台默认底色与暗幕被清掉，改由我们自己画半透明遮罩，才能叠出玻璃质感。
+ * 平台默认底色与暗幕被清掉，改由我们自己画遮罩；开启「弹窗背景模糊」时
+ * 用 Android 原生的窗口跨层模糊（FLAG_BLUR_BEHIND + blurBehindRadius），
+ * 由系统对弹窗下面的应用内容实时模糊。
  */
 @Composable
 private fun OverlayHost(
@@ -106,18 +112,53 @@ private fun OverlayHost(
         ),
     ) {
         val view = LocalView.current
-        LaunchedEffect(view) {
+        val blurWindow = kelaileDialogBlurEnabled()
+        val blurRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { 28.dp.toPx() }.toInt()
+        LaunchedEffect(view, blurWindow, blurRadiusPx) {
             (view.parent as? DialogWindowProvider)?.window?.let { window ->
                 window.setDimAmount(0f)
                 window.setBackgroundDrawable(
                     android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT),
                 )
+                if (blurWindow) {
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    window.attributes = window.attributes.also {
+                        it.blurBehindRadius = blurRadiusPx
+                    }
+                }
             }
         }
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value }) {
             content(progress.value)
         }
     }
+}
+
+/**
+ * 弹窗外的背景：半透明遮罩。窗口背后的实时模糊由 OverlayHost 用
+ * FLAG_BLUR_BEHIND 交给系统做；这里只负责压暗与拦截点击。
+ */
+@Composable
+internal fun BoxScope.OverlayScrim(
+    alpha: Float,
+    onClick: (() -> Unit)? = null,
+) {
+    val canvas = LocalKelaileCanvas.current
+    Box(
+        Modifier
+            .matchParentSize()
+            .graphicsLayer { this.alpha = alpha }
+            .background(canvas.scrim)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else Modifier,
+            ),
+    )
 }
 
 /**
@@ -137,26 +178,13 @@ fun GlassSheet(
     val canvas = LocalKelaileCanvas.current
     var drag by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(visible) { if (visible) drag = 0f }
-    val shape = RoundedCornerShape(
-        topStart = KelaileShapes.sheet,
-        topEnd = KelaileShapes.sheet,
-        bottomStart = 0.dp,
-        bottomEnd = 0.dp,
-    )
+    val shape = RoundedCornerShape(KelaileShapes.sheet)
     OverlayHost(visible = visible, onDismissRequest = onDismiss) { progress ->
         val eased = if (motion) progress else 1f
         Box(Modifier.fillMaxSize().imePadding()) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .background(canvas.scrim)
-                    .graphicsLayer { alpha = eased }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss,
-                    )
-                    .semantics { contentDescription = "关闭浮层" },
+            OverlayScrim(
+                alpha = eased,
+                onClick = onDismiss,
             )
             Column(
                 modifier
@@ -166,7 +194,7 @@ fun GlassSheet(
                     .padding(horizontal = 10.dp, vertical = 10.dp)
                     .graphicsLayer { translationY = (1f - eased) * 220.dp.toPx() + drag }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.05f, 0.12f))
-                    .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+                    .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
                     .glassSheen(shape, Color.White),
             ) {
                 Box(
@@ -251,20 +279,9 @@ fun KelaileDialog(
     ) { progress ->
         val eased = if (motion) progress else 1f
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .background(canvas.scrim)
-                    .graphicsLayer { alpha = eased }
-                    .then(
-                        if (dismissOnOutside) {
-                            Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onDismiss,
-                            )
-                        } else Modifier,
-                    ),
+            OverlayScrim(
+                alpha = eased,
+                onClick = if (dismissOnOutside) onDismiss else null,
             )
             Column(
                 modifier
@@ -278,7 +295,7 @@ fun KelaileDialog(
                         scaleY = s
                     }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.06f, 0.14f))
-                    .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+                    .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
                     .glassSheen(shape, Color.White)
                     .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -338,12 +355,7 @@ fun GlassDialogScaffold(
     ) { progress ->
         val eased = if (motion) progress else 1f
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .background(canvas.scrim)
-                    .graphicsLayer { alpha = eased },
-            )
+            OverlayScrim(alpha = eased)
             Column(
                 modifier
                     .padding(horizontal = 22.dp)
@@ -356,7 +368,7 @@ fun GlassDialogScaffold(
                         scaleY = s
                     }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.06f, 0.14f))
-                    .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+                    .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
                     .glassSheen(shape, Color.White)
                     .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -401,7 +413,7 @@ fun BoxScope.GlassBusyOverlay(visible: Boolean) {
         Column(
             Modifier
                 .then(KelaileElevation.soft(KelaileElevation.floating, shape))
-                .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
+                .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
                 .padding(horizontal = 26.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -14,7 +14,7 @@ object BackupCodec {
             put("school", s.school); put("schoolUrl", s.schoolUrl)
             put("theme", s.theme); put("navigationStyle", s.navigationStyle)
             put("themePalette", s.themePalette); put("dynamicColor", s.dynamicColor)
-            put("motionSpeed", s.motionSpeed); put("reduceMotion", s.reduceMotion); put("transitionStyle", s.transitionStyle); put("autoHideBars", s.autoHideBars)
+            put("motionSpeed", s.motionSpeed); put("reduceMotion", s.reduceMotion); put("transitionStyle", s.transitionStyle); put("autoHideBars", s.autoHideBars); put("dialogBlur", s.dialogBlur); put("powerSaverMotion", s.powerSaverMotion)
             put("fontScale", s.fontScale); put("density", s.density); put("cellTextAlign", s.cellTextAlign)
             put("firstDay", s.firstDay); put("lastDay", s.lastDay); put("weekStart", s.weekStart)
             put("currentWeek", s.currentWeek); put("weekCount", s.weekCount)
@@ -71,6 +71,8 @@ object BackupCodec {
                 reduceMotion = if(j.has("reduceMotion")) (j.get("reduceMotion") as? Boolean ?: error("reduceMotion 必须为布尔值")) else false,
                 transitionStyle = j.string("transitionStyle", defaults.transitionStyle),
             autoHideBars = if(j.has("autoHideBars")) (j.get("autoHideBars") as? Boolean ?: error("autoHideBars 必须为布尔值")) else false,
+                dialogBlur = j.flag("dialogBlur", defaults.dialogBlur),
+                powerSaverMotion = j.flag("powerSaverMotion", defaults.powerSaverMotion),
                 gradeLabel = j.string("gradeLabel", defaults.gradeLabel).take(12),
                 themePalette = j.string("themePalette", defaults.themePalette),
                 dynamicColor = if (j.has("dynamicColor")) (j.get("dynamicColor") as? Boolean ?: error("dynamicColor 必须为布尔值")) else defaults.dynamicColor,

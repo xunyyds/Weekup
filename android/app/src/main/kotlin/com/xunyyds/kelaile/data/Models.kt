@@ -59,6 +59,8 @@ data class AppSettings(
     val transitionStyle: String = "shared",
 
     val autoHideBars: Boolean = false,
+    val dialogBlur: Boolean = true,
+    val powerSaverMotion: Boolean = true,
     val gradeLabel: String = "大一",
 
     val timetableBackground: String = "",

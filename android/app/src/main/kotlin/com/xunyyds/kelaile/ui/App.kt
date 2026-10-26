@@ -268,6 +268,8 @@ fun KelaileApp() {
         data.settings.motionSpeed,
         data.settings.reduceMotion,
         data.settings.transitionStyle,
+        data.settings.dialogBlur,
+        data.settings.powerSaverMotion,
     ) {
         GlassHost {
             var splashVisible by remember { mutableStateOf(true) }

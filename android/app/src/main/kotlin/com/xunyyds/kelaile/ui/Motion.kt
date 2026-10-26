@@ -114,6 +114,37 @@ internal fun systemMotionEnabled(): Boolean {
 internal fun kelaileMotionEnabled(): Boolean =
     LocalKelaileMotionEnabled.current ?: systemMotionEnabled()
 
+/**
+ * 系统省电模式监听：开启省电模式时返回 true。
+ * PowerManager.isPowerSaveMode 在状态变化时无广播可直接观察，
+ * 通过 ACTION_POWER_SAVE_MODE_CHANGED 注册广播来感知。
+ */
+@Composable
+internal fun powerSaveModeActive(): Boolean {
+    val context = LocalContext.current
+    val powerManager = remember(context) {
+        context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+    }
+    var active by remember(context) { mutableStateOf(powerManager?.isPowerSaveMode ?: false) }
+    DisposableEffect(context) {
+        if (android.os.Build.VERSION.SDK_INT < 21) return@DisposableEffect onDispose { }
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                active = powerManager?.isPowerSaveMode ?: false
+            }
+        }
+        val registered = runCatching {
+            context.registerReceiver(
+                receiver,
+                android.content.IntentFilter("android.os.action.ACTION_POWER_SAVE_MODE_CHANGED"),
+            )
+        }.isSuccess
+        active = powerManager?.isPowerSaveMode ?: false
+        onDispose { if (registered) runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return active
+}
+
 @Composable
 fun MotionContent(
     target: String,
