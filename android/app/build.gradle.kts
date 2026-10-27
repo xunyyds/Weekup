@@ -10,8 +10,8 @@ android {
         applicationId = "com.xunyyds.kelaile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.6.0"
+        versionCode = 12
+        versionName = "2.6.2"
 
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
