@@ -23,19 +23,36 @@ object BackupCodec {
             put("timetableBackground", s.timetableBackground)
             put("tableHeaderColor", s.tableHeaderColor); put("cellBackgroundColor", s.cellBackgroundColor)
             put("cellTextColor", s.cellTextColor); put("gridLineColor", s.gridLineColor)
+            put("courseCellColor", s.courseCellColor)
             put("gridLineStyle", s.gridLineStyle); put("cellVerticalAlign", s.cellVerticalAlign)
             put("showAtSign", s.showAtSign); put("showTeacher", s.showTeacher)
             put("skippedVersion", s.skippedVersion)
             put("start", "${s.start}T00:00:00.000"); put("end", "${s.end}T00:00:00.000")
             put("periods", JSONArray().apply { s.periods.forEach { p -> put(JSONObject().put("period", p.period).put("startMinutes", p.startMinutes).put("endMinutes", p.endMinutes)) } })
         }
+        val coursesJson = JSONArray().apply { data.courses.forEach { c ->
+            put(JSONObject().put("id", c.id).put("name", c.name).put("weekday", c.weekday)
+                .put("startPeriod", c.startPeriod).put("endPeriod", c.endPeriod)
+                .put("weeks", JSONArray(c.weeks.distinct().sorted())).put("teacher", c.teacher).put("location", c.location)
+                .put("note", c.note))
+        } }
+        val todosJson = JSONArray().apply { data.todos.forEach { t ->
+            put(JSONObject().put("id", t.id).put("title", t.title).put("date", t.date.toString()).put("done", t.done))
+        } }
+        val eventsJson = JSONArray().apply { data.events.forEach { e ->
+            put(JSONObject().put("id", e.id).put("title", e.title).put("date", e.date.toString())
+                .put("startMinutes", e.startMinutes).put("endMinutes", e.endMinutes).put("note", e.note))
+        } }
+        val memosJson = JSONArray().apply { data.memos.forEach { m ->
+            put(JSONObject().put("id", m.id).put("title", m.title).put("body", m.body).put("updatedAt", m.updatedAt))
+        } }
         return JSONObject().put("version", 1).put("settings", settings)
-            .put("courses", JSONArray().apply { data.courses.forEach { c ->
-                put(JSONObject().put("id", c.id).put("name", c.name).put("weekday", c.weekday)
-                    .put("startPeriod", c.startPeriod).put("endPeriod", c.endPeriod)
-                    .put("weeks", JSONArray(c.weeks.distinct().sorted())).put("teacher", c.teacher).put("location", c.location)
-                    .put("note", c.note))
-            } }).put("colors", JSONObject(data.colors)).toString().also { require(it.length <= MAX_CHARS) { "课表文件过大" } }
+            .put("courses", coursesJson)
+            .put("colors", JSONObject(data.colors))
+            .put("todos", todosJson)
+            .put("events", eventsJson)
+            .put("memos", memosJson)
+            .toString().also { require(it.length <= MAX_CHARS) { "课表文件过大" } }
     }
 
     fun decode(source: String): AppData {
@@ -81,6 +98,7 @@ object BackupCodec {
                 cellBackgroundColor = j.colorOr("cellBackgroundColor", defaults.cellBackgroundColor),
                 cellTextColor = j.colorOr("cellTextColor", defaults.cellTextColor),
                 gridLineColor = j.colorOr("gridLineColor", defaults.gridLineColor),
+                courseCellColor = j.colorOr("courseCellColor", defaults.courseCellColor),
                 gridLineStyle = j.string("gridLineStyle", defaults.gridLineStyle)
                     .let { if (it in GRID_LINE_STYLES) it else defaults.gridLineStyle },
                 cellVerticalAlign = j.string("cellVerticalAlign", defaults.cellVerticalAlign)
@@ -101,7 +119,36 @@ object BackupCodec {
             val colors = if (!root.has("colors")) emptyMap() else root.getJSONObject("colors").let { c ->
                 c.keys().asSequence().associateWith { exactLong(c.get(it)) }
             }
-            return AppData(s, courses, colors)
+            val todos = if (!root.has("todos")) emptyList() else root.getJSONArray("todos").let { array ->
+                (0 until array.length()).map { i ->
+                    val t = array.getJSONObject(i)
+                    TodoItem(
+                        t.string("id"), t.string("title"), date(t.string("date")),
+                        if (t.has("done")) (t.get("done") as? Boolean ?: error("done 必须为布尔值")) else false,
+                    )
+                }
+            }
+            val events = if (!root.has("events")) emptyList() else root.getJSONArray("events").let { array ->
+                (0 until array.length()).map { i ->
+                    val e = array.getJSONObject(i)
+                    ScheduleEvent(
+                        e.string("id"), e.string("title"), date(e.string("date")),
+                        e.integer("startMinutes"), e.integer("endMinutes"),
+                        e.string("note", "").take(AGENDA_NOTE_MAX),
+                    )
+                }
+            }
+            val memos = if (!root.has("memos")) emptyList() else root.getJSONArray("memos").let { array ->
+                (0 until array.length()).map { i ->
+                    val m = array.getJSONObject(i)
+                    Memo(
+                        m.string("id"), m.string("title").take(MEMO_TITLE_MAX),
+                        m.string("body").take(MEMO_BODY_MAX),
+                        if (m.has("updatedAt")) exactLong(m.get("updatedAt")) else 0L,
+                    )
+                }
+            }
+            return AppData(s, courses, colors, todos, events, memos)
         } catch (e: Exception) {
             throw IllegalArgumentException("无效的课表文件：${e.message}", e)
         }

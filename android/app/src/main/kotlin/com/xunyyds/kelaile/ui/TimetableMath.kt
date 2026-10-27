@@ -31,6 +31,11 @@ internal data class GridLayout(
     val availH: Float,
     val gutterPx: Float,
     val headerPx: Float,
+    /**
+     * 表格底部额外多留的空行数。默认 2 行 ≈ 两节课的高度，
+     * 让最后一节课能滚到底栏之上，而不是被底栏压住。
+     */
+    val bottomRows: Int = 0,
 ) {
     fun cellWidth(zoom: Float): Float = availW / dayCount.coerceAtLeast(1) * zoom
 
@@ -38,7 +43,8 @@ internal data class GridLayout(
 
     fun contentWidth(zoom: Float): Float = cellWidth(zoom) * dayCount.coerceAtLeast(1)
 
-    fun contentHeight(zoom: Float): Float = cellHeight(zoom) * periodCount.coerceAtLeast(1)
+    fun contentHeight(zoom: Float): Float =
+        cellHeight(zoom) * (periodCount.coerceAtLeast(1) + bottomRows.coerceAtLeast(0))
 
     fun maxOffsetX(zoom: Float): Float = (contentWidth(zoom) - availW).coerceAtLeast(0f)
 
@@ -125,6 +131,26 @@ internal fun rubberOffset(
     val max = (content - viewport).coerceAtLeast(0f)
     return when {
         offset < 0f -> offset * factor
+        offset > max -> max + (offset - max) * factor
+        else -> offset
+    }
+}
+
+/**
+ * 纵向专用的橡皮筋：顶部不给越界余量。
+ *
+ * 滑到第一节课之后再往下拽，如果还留出越界位移，手指的竖直分量会被课表吃掉，
+ * 横向翻周就变得很难触发。顶部直接钉死在 0，底部仍保留回弹手感。
+ */
+internal fun rubberOffsetPinnedTop(
+    offset: Float,
+    viewport: Float,
+    content: Float,
+    factor: Float = GRID_RUBBER,
+): Float {
+    val max = (content - viewport).coerceAtLeast(0f)
+    return when {
+        offset < 0f -> 0f
         offset > max -> max + (offset - max) * factor
         else -> offset
     }

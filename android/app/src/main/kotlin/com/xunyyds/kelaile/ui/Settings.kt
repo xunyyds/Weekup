@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +55,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -258,20 +261,22 @@ fun SharedTransitionScope.SettingsPage(
                             Section("表格颜色") {
                                 ColorSettingRow("表头背景", s.tableHeaderColor, "表头与节次栏") { applySettings { s.copy(tableHeaderColor = it) } }
                                 ColorSettingRow("单元格背景", s.cellBackgroundColor, "课表格子底色") { applySettings { s.copy(cellBackgroundColor = it) } }
+                                // 有课格子在没有单独设色的课程上取这个底色，跟着「单元格背景」之上叠一层
+                                ColorSettingRow("有课表格", s.courseCellColor, "有课格子的底色（未单独设色的课程）") { applySettings { s.copy(courseCellColor = it) } }
                             }
                             Section("文字与线") {
                                 ColorSettingRow("表格文字颜色", s.cellTextColor, "表头与格内文字") { applySettings { s.copy(cellTextColor = it) } }
                                 ColorSettingRow("格子边框颜色", s.gridLineColor, "网格线颜色") { applySettings { s.copy(gridLineColor = it) } }
                                 ChoiceSetting(
-                                    "网格线样式", s.gridLineStyle,
+                                    "网格模式", s.gridLineStyle,
                                     linkedMapOf(
                                         GRID_LINE_DASHED to "虚线",
                                         GRID_LINE_TRANSPARENT to "透明线（保留间距）",
-                                        GRID_LINE_NONE to "无样式（与背景同色）",
+                                        GRID_LINE_NONE to "无网格（容器去圆角）",
                                     ),
                                 ) { applySettings { s.copy(gridLineStyle = it) } }
                             }
-                            SectionHint("虚线为默认观感；透明线保留格子间距但不着色；无样式去掉间距，视觉上没有网格线。")
+                            SectionHint("虚线为默认观感；透明线保留格子间距但不着色；无网格去掉间距与容器圆角，整张表直接铺在壁纸上。")
                         }
                         Route.Display -> {
                             Section("格内显示") {
@@ -399,10 +404,10 @@ fun SharedTransitionScope.SettingsPage(
                             }
                             SectionHint("整应用备份是 JSON，包含全部设置与备注；恢复会覆盖当前全部数据，建议先导出一份。")
                             Section("课表导入导出") {
-                                SettingsItem("导入课表（Excel）", "仅支持 .xlsx 表格；旧版 JSON 备份不支持") { onImportTimetable() }
+                                SettingsItem("导入课表（Excel）", "仅支持 .xlsx 表格") { onImportTimetable() }
                                 SettingsItem("导出课表（Excel）", "仅导出课表表格，不含应用设置与备注") { onExportTimetable() }
                             }
-                            SectionHint("课表导入不兼容旧数据格式：旧版 JSON 备份请改用「恢复应用数据」。")
+                            SectionHint("课表导入只认 Excel 表格；整套数据请走「备份/恢复应用数据」。")
                             Section("教务导入") {
                                 SettingsItem("教务网址", s.schoolUrl.ifBlank { "填写学校实际教务入口" }) { text("教务网址", s.schoolUrl) { applySettings { s.copy(schoolUrl = it.trim()) } } }
                                 SettingsItem("浏览器导入课表", "桌面模式 · 自动识别学校 · 预览确认") { onBrowser() }
@@ -771,16 +776,30 @@ private fun ReminderMinutesSetting(value: Int, onChange: (Int) -> Unit) {
     )
 }
 
+/**
+ * 颜色设置行：点击打开取色器，长按整行恢复默认（跟随主题）。
+ *
+ * 已经是「跟随主题」时长按不再写入同一个值，只给一次触觉反馈，
+ * 让用户知道手势被识别到、无需重复操作。
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ColorSettingRow(title: String, value: Long, subtitle: String, onChange: (Long) -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
     val label = if (value == GRID_COLOR_AUTO) "跟随主题" else "#${value.toString(16).padStart(8, '0').uppercase()}"
     SettingsTarget(title) {
         SectionRow {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { open = true }
+                    .combinedClickable(
+                        onClick = { open = true },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (value != GRID_COLOR_AUTO) onChange(GRID_COLOR_AUTO)
+                        },
+                    )
                     .heightIn(min = 62.dp)
                     .padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -788,7 +807,7 @@ private fun ColorSettingRow(title: String, value: Long, subtitle: String, onChan
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(title, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        subtitle,
+                        "$subtitle · 长按恢复默认",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

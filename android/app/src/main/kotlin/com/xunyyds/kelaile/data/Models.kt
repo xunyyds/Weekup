@@ -68,6 +68,7 @@ data class AppSettings(
     val cellBackgroundColor: Long = GRID_COLOR_AUTO,
     val cellTextColor: Long = GRID_COLOR_AUTO,
     val gridLineColor: Long = GRID_COLOR_AUTO,
+    val courseCellColor: Long = GRID_COLOR_AUTO,
     val gridLineStyle: String = GRID_LINE_DASHED,
     val cellVerticalAlign: String = CELL_VERTICAL_TOP,
 
@@ -94,7 +95,7 @@ data class AppSettings(
         require(gridLineStyle in GRID_LINE_STYLES) { "网格线样式无效" }
         require(cellVerticalAlign in CELL_VERTICAL_ALIGNS) { "格内竖直对齐方式无效" }
         require(
-            listOf(tableHeaderColor, cellBackgroundColor, cellTextColor, gridLineColor)
+            listOf(tableHeaderColor, cellBackgroundColor, cellTextColor, gridLineColor, courseCellColor)
                 .all { it == GRID_COLOR_AUTO || it in 0..0xffffffffL }
         ) { "无效的课表颜色" }
         require(timetableBackground.length <= TIMETABLE_BACKGROUND_MAX) { "课程表背景路径过长" }
@@ -147,6 +148,9 @@ data class AppData(
     val settings: AppSettings = AppSettings(),
     val courses: List<CourseSession> = emptyList(),
     val colors: Map<String, Long> = emptyMap(),
+    val todos: List<TodoItem> = emptyList(),
+    val events: List<ScheduleEvent> = emptyList(),
+    val memos: List<Memo> = emptyList(),
 ) {
     init { validate() }
     fun validate() {
@@ -154,6 +158,9 @@ data class AppData(
         val numbers = settings.periods.map { it.period }.toSet()
         require(courses.all { c -> c.weeks.all { it <= settings.weekCount } && (c.startPeriod..c.endPeriod).all { it in numbers } }) { "课程周次或节次超出设置" }
         require(colors.values.all { it in 0..0xffffffffL }) { "无效的颜色" }
+        require(todos.map { it.id }.distinct().size == todos.size) { "待办编号重复" }
+        require(events.map { it.id }.distinct().size == events.size) { "事件编号重复" }
+        require(memos.map { it.id }.distinct().size == memos.size) { "备忘编号重复" }
     }
     fun forWeek(week: Int): List<CourseSession> = courses.filter { week in it.weeks }
 }

@@ -62,6 +62,12 @@ private val dayNames = listOf("星期一", "星期二", "星期三", "星期四"
 
 private val gridCellShape = androidx.compose.ui.graphics.RectangleShape
 
+/**
+ * 表格底部额外预留的空行数：约等于两节课的高度，
+ * 让最后一节课滚得到底栏之上，不被悬浮底栏压住。
+ */
+private const val GRID_BOTTOM_ROWS = 2
+
 private val gutterWidth = 42.dp
 
 private val dayHeaderHeight = 38.dp
@@ -75,6 +81,14 @@ internal data class PlacedCourse(
     val startIndex: Int,
     val endIndex: Int,
 )
+
+/**
+ * 屏幕上的一格：星期、行下标与节次号。
+ *
+ * 空白格点击的「先出加号、再进编辑」两步状态就挂在这上面，
+ * 用行号而不是节次号做失败比较，节次跳号时也不会串格。
+ */
+internal data class GridCell(val weekday: Int, val rowIndex: Int, val period: Int)
 
 internal data class WeekProjection(
     val days: List<Int>,
@@ -187,6 +201,28 @@ private fun gridCellPadding(style: String): androidx.compose.ui.unit.Dp =
     if (style == GRID_LINE_NONE) 0.dp else 1.dp
 
 /**
+ * 表格容器的形状：选「无网格」时整个容器去掉圆角、描边与压面，
+ * 表格直接铺在壁纸上；其余样式保持原来的大圆角玻璃卡。
+ */
+private fun gridContainerShape(style: String) =
+    if (style == GRID_LINE_NONE) androidx.compose.ui.graphics.RectangleShape
+    else KelaileShapes.rounded(KelaileShapes.card)
+
+/**
+ * 课表容器的压面浓度：设了背景图时压得很淡，让图透出来；
+ * 没设图时保持原来的玻璃浓度。
+ */
+private fun gridVeil(settings: AppSettings, dark: Boolean, top: Boolean): Float {
+    val hasImage = settings.timetableBackground.isNotBlank()
+    return when {
+        hasImage && dark -> if (top) 0.18f else 0.10f
+        hasImage -> if (top) 0.26f else 0.16f
+        dark -> if (top) 0.5f else 0.38f
+        else -> if (top) 0.62f else 0.5f
+    }
+}
+
+/**
  * 网格线图层，只负责「虚线」。
  *
  * 其余两种样式靠格子间距表达：缝隙露出课表背景即「透明线」，缝隙归零即「无样式」。
@@ -222,8 +258,16 @@ private fun courseVisual(
     colors: Map<String, Long>,
     defaultColor: Long,
     dark: Boolean,
+    courseCellColor: Long = com.xunyyds.kelaile.data.GRID_COLOR_AUTO,
 ): CourseStyle {
-    val raw = Color(colors[course.id] ?: defaultColor)
+    // 优先用课程自己的颜色；没单独设色时，先看「有课表格自定义颜色」，
+    // 再回退到默认课程色。这样设置里的新项能一次性统一所有未设色的课。
+    val explicit = colors[course.id]
+    val raw = when {
+        explicit != null -> Color(explicit)
+        courseCellColor != com.xunyyds.kelaile.data.GRID_COLOR_AUTO -> Color(courseCellColor)
+        else -> Color(defaultColor)
+    }
     val tint = courseCardTint(raw, dark)
     return CourseStyle(tint, courseCardInk(tint, dark))
 }
@@ -237,6 +281,8 @@ fun Timetable(
     onViewWeek: (Int) -> Unit,
     onCourse: (CourseSession) -> Unit,
     onAdd: () -> Unit,
+    /** 在指定星期与节次上开新课（空白格二次点击进入编辑时用它预填表单）。 */
+    onAddAt: (weekday: Int, period: Int) -> Unit = { _, _ -> onAdd() },
     locatedCourseId: String? = null,
     onLocateHandled: () -> Unit = {},
     onImmersive: (Boolean) -> Unit = {},
@@ -281,7 +327,9 @@ fun Timetable(
         snapshotFlow { grid.zoom }.distinctUntilChanged().collect { zoomMemory = it }
     }
 
-    var longPressArmed by remember { mutableStateOf(false) }
+    // 空白格两步点击：第一次点亮加号，第二次才进编辑。排课模式下同样走这一套。
+    var tappedCell by remember { mutableStateOf<GridCell?>(null) }
+
     val gutterPx = with(density) { gutterWidth.toPx() }
     val headerPx = with(density) { dayHeaderHeight.toPx() }
     val week = viewWeek.coerceIn(1, s.weekCount)
@@ -294,20 +342,23 @@ fun Timetable(
     }
     val canvasColors = LocalKelaileCanvas.current
     val palette = rememberGridPalette(s)
-    val styles = remember(projection, data.colors, s.defaultColor, canvasColors.isDark) {
+    val styles = remember(projection, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor) {
         projection.placed.values.asSequence().flatten()
             .associate {
-                it.course.id to courseVisual(it.course, data.colors, s.defaultColor, canvasColors.isDark)
+                it.course.id to courseVisual(it.course, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor)
             }
     }
-    val background by rememberBackgroundPainter(s.timetableBackground)
+    // 课表背景图由页面壁纸层统一绘制（App.kt 传入），这里不再重复解码
 
     val dayCount = projection.days.size.coerceAtLeast(1)
     val periodCount = s.periods.size.coerceAtLeast(1)
     val availW = (boxW - gutterPx).coerceAtLeast(1f)
     val availH = (viewportH - headerPx).coerceAtLeast(1f)
-    val layout = remember(dayCount, periodCount, availW, availH, gutterPx, headerPx) {
-        GridLayout(dayCount, periodCount, availW, availH, gutterPx, headerPx)
+    val noGrid = palette.lineStyle == GRID_LINE_NONE
+    // 底部统一预留约两节课的高度，任何一种网格模式下最后一节课都能滚到底栏之上
+    val bottomRows = GRID_BOTTOM_ROWS
+    val layout = remember(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows) {
+        GridLayout(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows)
     }
     val zoom = grid.zoom
     val cellW = layout.cellWidth(zoom)
@@ -340,15 +391,8 @@ fun Timetable(
         slide.animateTo(0f, tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing))
     }
 
-    LaunchedEffect(longPressArmed) {
-        if (!longPressArmed || editMode) return@LaunchedEffect
-        kotlinx.coroutines.delay(android.view.ViewConfiguration.getLongPressTimeout().toLong())
-        if (longPressArmed && !editMode) {
-            longPressArmed = false
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onEditMode(true)
-        }
-    }
+    // 长按不再武装「进排课模式」：排课只在右上角「更多」菜单里进（见 TopBar 菜单）。
+    // 这里仅保留长按指针跟踪的清理，避免上一轮的手势状态漏到下一轮。
 
     BackHandler(enabled = editMode) { onEditMode(false) }
     LaunchedEffect(editMode) { if (!editMode) { dragging = null; dragSpot = null; columnFrom = 0; rowFrom = 0 } }
@@ -437,14 +481,64 @@ fun Timetable(
         return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
     }
 
-    /** 按下点是否落在一张有课卡片上：只有有课才允许武装长按进编辑，空白格长按不再误触。 */
-    fun courseAt(x: Float, y: Float): Boolean {
+    /**
+     * 点中的那门课；点在空白格（或表格之外）返回 null。
+     *
+     * 与 [cellAt] 共用同一套坐标换算，保证「点中卡片」和「点中格子」不会互相矛盾。
+     */
+    fun courseAtPoint(x: Float, y: Float): CourseSession? {
         val bounds = layoutNow
-        if (x < bounds.gutterPx || y < bounds.headerPx) return false
+        if (x < bounds.gutterPx || y < bounds.headerPx) return null
         val col = bounds.columnAt(x, grid.offsetX, grid.zoom)
         val row = bounds.rowAt(y, grid.offsetY, grid.zoom)
-        val day = projectionNow.days.getOrNull(col) ?: return false
-        return projectionNow.placed[day].orEmpty().any { row in it.startIndex..it.endIndex }
+        val day = projectionNow.days.getOrNull(col) ?: return null
+        return projectionNow.placed[day].orEmpty()
+            .firstOrNull { row in it.startIndex..it.endIndex }?.course
+    }
+
+    /** 按下点是否落在一张有课卡片上。 */
+    fun courseAt(x: Float, y: Float): Boolean = courseAtPoint(x, y) != null
+
+    /**
+     * 把屏幕坐标换算成「表格里的哪一格」。落在左侧节次栏、星期表头或
+     * 底部预留空白里时返回 null —— 那些位置不是可编辑的格子。
+     */
+    fun cellAt(x: Float, y: Float): GridCell? {
+        val bounds = layoutNow
+        if (x < bounds.gutterPx || y < bounds.headerPx) return null
+        val col = bounds.columnAt(x, grid.offsetX, grid.zoom)
+        val row = bounds.rowAt(y, grid.offsetY, grid.zoom)
+        if (row !in 0 until periodCount) return null
+        val day = projectionNow.days.getOrNull(col) ?: return null
+        val period = settingsNow.periods.getOrNull(row)?.period ?: return null
+        return GridCell(day, row, period)
+    }
+
+    /**
+     * 单击的统一入口。
+     *
+     * 规则只有一条：有课卡片 → 打开课程详情；空白格 → 第一次点亮加号、第二次开编辑。
+     * 「第一次」与「第二次」以格子为准，换一格就从第一下重新开始。
+     */
+    fun handleTap(position: Offset) {
+        val hit = courseAtPoint(position.x, position.y)
+        if (hit != null) {
+            tappedCell = null
+            onCourse(hit)
+            return
+        }
+        val cell = cellAt(position.x, position.y)
+        if (cell == null) {
+            tappedCell = null
+            return
+        }
+        if (tappedCell == cell) {
+            tappedCell = null
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onAddAt(cell.weekday, cell.period)
+        } else {
+            tappedCell = cell
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -467,8 +561,9 @@ fun Timetable(
                 } else {
                     Column(
                         Modifier.fillMaxWidth().combinedClickable(
+                            // 点按打开周次选择器；长按无响应，避免误触
                             onClick = { pickerOpen = true },
-                            onLongClick = { pickerOpen = true },
+                            onLongClick = { },
                         ),
                         verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
@@ -551,26 +646,38 @@ fun Timetable(
                 }
             }
         } else {
-            val gridShape = KelaileShapes.rounded(KelaileShapes.card)
+            Box(Modifier.fillMaxSize()) {
+            val gridShape = gridContainerShape(palette.lineStyle)
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 10.dp)
-                    .then(KelaileElevation.soft(4.dp, gridShape, 0.03f, 0.06f))
+                    .padding(horizontal = if (noGrid) 0.dp else 10.dp)
+                    .then(
+                        // 无网格时不投影、不描边：表格与壁纸齐平，没有任何容器痕迹
+                        if (noGrid) Modifier
+                        else KelaileElevation.soft(4.dp, gridShape, 0.03f, 0.06f),
+                    )
                     .clip(gridShape)
                     .background(
                         Brush.verticalGradient(
-                            0f to canvasColors.fillElevated.copy(alpha = if (canvasColors.isDark) 0.5f else 0.62f),
-                            1f to canvasColors.fill.copy(alpha = if (canvasColors.isDark) 0.38f else 0.5f),
+                            0f to canvasColors.fillElevated.copy(
+                                alpha = if (noGrid) 0f else gridVeil(s, canvasColors.isDark, top = true),
+                            ),
+                            1f to canvasColors.fill.copy(
+                                alpha = if (noGrid) 0f else gridVeil(s, canvasColors.isDark, top = false),
+                            ),
                         ),
                     )
-                    .border(
-                        1.dp,
-                        Brush.verticalGradient(
-                            0f to canvasColors.strokeTop,
-                            1f to canvasColors.strokeBottom,
+                    .then(
+                        if (noGrid) Modifier
+                        else Modifier.border(
+                            1.dp,
+                            Brush.verticalGradient(
+                                0f to canvasColors.strokeTop,
+                                1f to canvasColors.strokeBottom,
+                            ),
+                            gridShape,
                         ),
-                        gridShape,
                     ),
             ) {
             Box(
@@ -580,18 +687,15 @@ fun Timetable(
                     .onSizeChanged { boxW = it.width; viewportH = it.height }
                     .pointerInput(Unit) {
                         val touchSlop = viewConfiguration.touchSlop
-                        val doubleTapMillis = viewConfiguration.doubleTapTimeoutMillis
+                        // 系统长按时长：按下不移动超过这个时间就算长按
+                        val longPressTimeout =
+                            android.view.ViewConfiguration.getLongPressTimeout().toLong()
 
-                        val longPressCancelSlop = with(density) { 4.dp.toPx() }
-                        var lastTapUptime = 0L
-                        var lastTapAt = Offset.Zero
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             gestureJob.cancel()
                             velocityTracker.resetTracking()
                             velocityTracker.addPosition(down.uptimeMillis, down.position)
-
-                            longPressArmed = !editMode && courseAt(down.position.x, down.position.y)
 
                             var pinched = false
                             var started = false
@@ -604,6 +708,9 @@ fun Timetable(
                             var lastRung = nearestZoomRung(grid.zoom)
                             val primaryId = down.id
                             var lastUptime = down.uptimeMillis
+                            // 长按判定：按下后原地不动超过系统长按时长，就吞掉这一轮的点击，
+                            // 既不开课程详情、也不进排课模式 —— 同一个手势只执行一个逻辑。
+                            var longPressed = false
 
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -644,7 +751,7 @@ fun Timetable(
                                         grid.offsetX = rubberOffset(
                                             grid.offsetX - pan.x, bounds.availW, bounds.contentWidth(grid.zoom),
                                         )
-                                        grid.offsetY = rubberOffset(
+                                        grid.offsetY = rubberOffsetPinnedTop(
                                             grid.offsetY - pan.y, bounds.availH, bounds.contentHeight(grid.zoom),
                                         )
                                     }
@@ -660,7 +767,6 @@ fun Timetable(
                                 if (!started) {
                                     travelled = delta.getDistance()
 
-                                    if (travelled > longPressCancelSlop) longPressArmed = false
                                     if (travelled < touchSlop) {
                                         velocityTracker.addPosition(tracked.uptimeMillis, tracked.position)
                                         continue
@@ -684,36 +790,25 @@ fun Timetable(
                                     } else if (!verticalOnly) {
                                         weekPull += pan.x
                                     }
-                                    grid.offsetY = rubberOffset(
+                                    // 顶部钉死：滑到第一节课后不再产生越界位移，
+                                    // 竖直方向的余量才能让给横向翻周
+                                    grid.offsetY = rubberOffsetPinnedTop(
                                         grid.offsetY - pan.y, bounds.availH, bounds.contentHeight(grid.zoom),
                                     )
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
 
-                            longPressArmed = false
+                            // 双击不再缩放：空白格的「第一次点亮加号、第二次进编辑」本身就是两次单击，
+                            // 再叠一层双击手势会把第二次点击吃掉，加号永远进不了编辑。
                             if (consumedByChild) return@awaitEachGesture
-
-                            if (!pinched && !editNow && !started &&
-                                lastTapUptime != 0L &&
-                                down.uptimeMillis - lastTapUptime <= doubleTapMillis &&
-                                (down.position - lastTapAt).getDistance() <= touchSlop * 2f
+                            // 原地长按：只给一次触觉反馈，不派发任何点击
+                            if (!started && !pinched &&
+                                lastUptime - down.uptimeMillis >= longPressTimeout
                             ) {
-                                val bounds = layoutNow
-                                val next = if (grid.zoom >= GRID_MAX_ZOOM - 1e-3f) GRID_MIN_ZOOM
-                                else nextZoomRung(grid.zoom)
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                gestureJob.launch(scope) {
-                                    animateZoomTo(
-                                        next,
-                                        (down.position.x - bounds.gutterPx).coerceIn(0f, bounds.availW),
-                                        (down.position.y - bounds.headerPx).coerceIn(0f, bounds.availH),
-                                    )
-                                }
-                                lastTapUptime = 0L
-                                return@awaitEachGesture
+                                longPressed = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
-
                             val velocity = velocityTracker.calculateVelocity()
                             val bounds = layoutNow
                             val maxXnow = bounds.maxOffsetX(grid.zoom)
@@ -727,7 +822,6 @@ fun Timetable(
                             }
                             if (turnBy != 0) {
                                 grid.offsetX = 0f
-                                lastTapUptime = 0L
                                 onWeekNow((weekNow + turnBy).coerceIn(1, settingsNow.weekCount))
                                 return@awaitEachGesture
                             }
@@ -737,24 +831,13 @@ fun Timetable(
                             }
                             if (started || pinched) {
                                 settle(Offset(velocity.x, velocity.y), pinched, lastCentroid)
-                                lastTapUptime = 0L
-                            } else {
-                                lastTapUptime = lastUptime
-                                lastTapAt = down.position
+                            } else if (!longPressed) {
+                                // 单击：只负责「点亮加号 → 再点进编辑」，不做别的
+                                handleTap(down.position)
                             }
                         }
                     },
             ) {
-                background?.let { painter ->
-                    androidx.compose.foundation.Image(
-                        painter = painter,
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        alpha = .45f,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                }
                 Row(
                     Modifier.fillMaxSize().graphicsLayer {
                         translationX = slide.value * size.width
@@ -772,7 +855,7 @@ fun Timetable(
                                 .height(with(density) { availH.toDp() })
                                 .wrapContentHeight(Alignment.Top, unbounded = true)
                                 .clipToBounds()
-                                .graphicsLayer { translationY = -grid.offsetY },
+                                .graphicsLayer { translationY = -grid.offsetY.roundToInt().toFloat() },
                         ) {
                             val groups = remember(s.periods) { PeriodGroups.indexMap(s.periods) }
                             s.periods.forEachIndexed { rowIndex, pr ->
@@ -944,7 +1027,7 @@ fun Timetable(
                                         .height(with(density) { availH.toDp() })
                                         .wrapContentHeight(Alignment.Top, unbounded = true)
                                         .clipToBounds()
-                                        .graphicsLayer { translationY = -grid.offsetY },
+                                        .graphicsLayer { translationY = -grid.offsetY.roundToInt().toFloat() },
                                 ) {
                                         Column {
                                             repeat(periodCount) {
@@ -974,7 +1057,7 @@ fun Timetable(
                                             val course = pc.course
                                             val laneW = with(density) { (cellWpx / pc.laneCount).toDp() }
                                             val style = styles[course.id]
-                                                ?: courseVisual(course, data.colors, s.defaultColor, canvasColors.isDark)
+                                                ?: courseVisual(course, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor)
                                             val located = locatedCourseId == course.id
                                             val locatePulse = remember { Animatable(0f) }
                                             LaunchedEffect(located) {
@@ -994,7 +1077,9 @@ fun Timetable(
                                                 .offset(x = laneW * pc.lane, y = with(density) { (cellHpx * pc.startIndex).toDp() })
                                                 .width(laneW)
                                                 .height(with(density) { (cellHpx * (pc.endIndex - pc.startIndex + 1)).toDp() })
-                                                .padding(1.dp)
+                                                // 与空白格用同一份内缩：卡片外缘正好落在格子外缘上，
+                                                // 不会露出一圈比格子底色更深的缝
+                                                .padding(gridCellPadding(palette.lineStyle))
                                                 .then(
                                                     if (located) Modifier
                                                         .graphicsLayer {
@@ -1118,13 +1203,13 @@ fun Timetable(
 
                 dragging?.let { ghost ->
                     val ghostStyle = styles[ghost.course.id]
-                        ?: courseVisual(ghost.course, data.colors, s.defaultColor, canvasColors.isDark)
+                        ?: courseVisual(ghost.course, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor)
                     Box(
                         Modifier
                             .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
                             .width(with(density) { cellWpx.toDp() })
                             .height(with(density) { (cellHpx * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
-                            .padding(1.dp)
+                            .padding(gridCellPadding(palette.lineStyle))
                             .then(
                                 Modifier
                                     .graphicsLayer { alpha = .92f }
@@ -1138,6 +1223,40 @@ fun Timetable(
                             ),
                     )
                 }
+                // 空白格第一次点击：在对应位置点亮一个加号，第二次点击才进编辑
+                tappedCell?.let { cell ->
+                    val cellIndex = projection.days.indexOf(cell.weekday)
+                    if (cellIndex >= 0) {
+                        val accent = MaterialTheme.colorScheme.primary
+                        val cellShape = androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs)
+                        Box(
+                            Modifier
+                                .offset { IntOffset(
+                                    (gutterPx + cellIndex * cellWpx - grid.offsetX).roundToInt(),
+                                    (headerPx + cell.rowIndex * cellHpx - grid.offsetY).roundToInt(),
+                                ) }
+                                .width(with(density) { cellWpx.toDp() })
+                                .height(with(density) { cellHpx.toDp() })
+                                .padding(gridCellPadding(palette.lineStyle))
+                                .background(accent.copy(alpha = .14f), cellShape)
+                                .border(1.5.dp, accent.copy(alpha = .72f), cellShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+                                val half = size.minDimension / 2f
+                                val pen = 2.dp.toPx()
+                                drawLine(
+                                    accent, Offset(center.x - half, center.y), Offset(center.x + half, center.y),
+                                    strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                )
+                                drawLine(
+                                    accent, Offset(center.x, center.y - half), Offset(center.x, center.y + half),
+                                    strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                )
+                            }
+                        }
+                    }
+                }
                 dragSpot?.let { spot ->
                     val spotIndex = projection.days.indexOf(spot.first)
                     if (spotIndex >= 0) Box(
@@ -1148,7 +1267,7 @@ fun Timetable(
                             ) }
                             .width(with(density) { cellWpx.toDp() })
                             .height(with(density) { cellHpx.toDp() })
-                            .padding(1.dp)
+                            .padding(gridCellPadding(palette.lineStyle))
                             .background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = .16f),
                                 androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
@@ -1160,6 +1279,7 @@ fun Timetable(
                             ),
                     )
                 }
+            }
             }
             }
         }

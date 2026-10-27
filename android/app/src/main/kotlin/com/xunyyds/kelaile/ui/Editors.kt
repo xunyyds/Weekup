@@ -64,15 +64,21 @@ fun CourseEditor(
     initialColor: Long,
     onBack: () -> Unit,
     onSave: (CourseSession, Long) -> Unit,
+    /** 从空白格二次点击进来时预填的「星期、节次」；从菜单进来时为 null。 */
+    presetCell: Pair<Int, Int>? = null,
 ) {
     val id = rememberSaveable(course?.id) { course?.id ?: UUID.randomUUID().toString() }
     var name by rememberSaveable(course?.id) { mutableStateOf(course?.name.orEmpty()) }
     var teacher by rememberSaveable(course?.id) { mutableStateOf(course?.teacher.orEmpty()) }
     var location by rememberSaveable(course?.id) { mutableStateOf(course?.location.orEmpty()) }
-    var weekday by rememberSaveable(course?.id) { mutableStateOf(course?.weekday ?: 1) }
+    var weekday by rememberSaveable(course?.id) { mutableStateOf(course?.weekday ?: presetCell?.first ?: 1) }
     val availablePeriods = settings.periods.map { it.period }.distinct().sorted()
-    var start by rememberSaveable(course?.id) { mutableStateOf(course?.startPeriod ?: availablePeriods.firstOrNull() ?: 1) }
-    var end by rememberSaveable(course?.id) { mutableStateOf(course?.endPeriod ?: availablePeriods.firstOrNull() ?: 1) }
+    var start by rememberSaveable(course?.id) {
+        mutableStateOf(course?.startPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1)
+    }
+    var end by rememberSaveable(course?.id) {
+        mutableStateOf(course?.endPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1)
+    }
     var weeks by rememberSaveable(course?.id) { mutableStateOf(course?.weeks?.joinToString(",") ?: "1-${settings.weekCount}") }
     var parity by rememberSaveable(course?.id) { mutableStateOf(0) }
     var selectedColor by rememberSaveable(course?.id, initialColor) { mutableStateOf(initialColor and 0xffffffffL) }
@@ -83,9 +89,9 @@ fun CourseEditor(
     val dirty = name != course?.name.orEmpty() ||
         teacher != course?.teacher.orEmpty() ||
         location != course?.location.orEmpty() ||
-        weekday != (course?.weekday ?: 1) ||
-        start != (course?.startPeriod ?: availablePeriods.firstOrNull() ?: 1) ||
-        end != (course?.endPeriod ?: availablePeriods.firstOrNull() ?: 1) ||
+        weekday != (course?.weekday ?: presetCell?.first ?: 1) ||
+        start != (course?.startPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1) ||
+        end != (course?.endPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1) ||
         weeks != initialWeeks ||
         selectedColor != (initialColor and 0xffffffffL)
     fun requestBack() {

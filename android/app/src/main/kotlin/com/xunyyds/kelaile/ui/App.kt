@@ -32,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import com.xunyyds.kelaile.data.AppData
 import com.xunyyds.kelaile.data.CourseSession
 import com.xunyyds.kelaile.data.NOTE_MAX
@@ -64,6 +67,15 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
 private val dayNames = listOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+
+/**
+ * 底栏四个入口的下标。顺序与 KelaileDock 里的 labels 一一对应，
+ * 界面各处一律用这几个常量，不再写魔法数字。
+ */
+private const val TAB_TIMETABLE = 0
+private const val TAB_AGENDA = 1
+private const val TAB_MEMO = 2
+private const val TAB_SETTINGS = 3
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -175,6 +187,8 @@ fun KelaileApp() {
     }
 
     var editSnapshot by remember { mutableStateOf<AppData?>(null) }
+    // 空白格二次点击时，把点中的星期与节次带进新增课程表单
+    var pendingNewCourse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     fun enterEditMode(on: Boolean) {
         if (on && editSnapshot == null) editSnapshot = data
         if (!on) editSnapshot = null
@@ -255,9 +269,42 @@ fun KelaileApp() {
     }
 
     val overlayDock = data.settings.navigationStyle != "default"
+    // 课表背景图挂在壁纸采样层：顶栏模糊、状态栏取色与全屏显示都靠这一层
+    val timetableBackground by rememberBackgroundPainter(
+        if (page == "home" && tab == TAB_TIMETABLE) data.settings.timetableBackground else "",
+    )
     LaunchedEffect(data.settings.currentWeek) { viewWeek = data.settings.currentWeek }
     LaunchedEffect(page, tab) {
-        if (page != "home" || tab != 0) { immersive = false; systemBars(false) }
+        if (page != "home" || tab != TAB_TIMETABLE) { immersive = false; systemBars(false) }
+    }
+    val themeDark = when (data.settings.theme.lowercase()) {
+        "dark" -> true
+        "light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+    // 状态栏字色跟课表背景图亮度走：背景亮用深字，背景暗用浅字，避免时间看不清
+    var statusBarInkDark by remember { mutableStateOf(themeDark) }
+    LaunchedEffect(data.settings.timetableBackground, themeDark) {
+        statusBarInkDark = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.xunyyds.kelaile.ui.statusBarInkDarkFor(
+                data.settings.timetableBackground.ifBlank { null },
+                themeDark,
+            )
+        }
+    }
+    DisposableEffect(statusBarInkDark, immersive) {
+        val activity = context.kelaileHostActivity()
+        if (activity != null) {
+            val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            if (immersive && data.settings.autoHideBars) {
+                controller.isAppearanceLightStatusBars = false
+                controller.isAppearanceLightNavigationBars = false
+            } else {
+                controller.isAppearanceLightStatusBars = !statusBarInkDark
+                controller.isAppearanceLightNavigationBars = !statusBarInkDark
+            }
+        }
+        onDispose { }
     }
     BackHandler(page != "home" && !searchOpen) { page = "home" }
     KelaileTheme(
@@ -275,7 +322,10 @@ fun KelaileApp() {
             var splashVisible by remember { mutableStateOf(true) }
             LaunchedEffect(ready) { if (ready) splashVisible = false }
             Box(Modifier.fillMaxSize()) {
-                KelaileScreenBackground(Modifier.fillMaxSize()) {
+                KelaileScreenBackground(
+                    Modifier.fillMaxSize(),
+                    backgroundPainter = timetableBackground,
+                ) {
                     if (ready) {
                         SharedTransitionLayout {
                             Column(Modifier.fillMaxSize()) {
@@ -296,16 +346,21 @@ fun KelaileApp() {
                                 MotionContent(page, Modifier.weight(1f)) { route ->
                                     when (route) {
                                         "course" -> CourseEditor(
-                                            editing,
-                                            data.settings,
-                                            editing?.let { data.colors[it.id] } ?: data.settings.defaultColor,
-                                            { page = "home" },
-                                        ) { course, color ->
-                                            try {
-                                                pushUndo()
-                                                commit(ScheduleActions.saveCourse(data, course, color)) { page = "home" }
-                                            } catch (e: Exception) { message(e.message ?: "课程参数无效") }
-                                        }
+                                            course = editing,
+                                            settings = data.settings,
+                                            initialColor = editing?.let { data.colors[it.id] } ?: data.settings.defaultColor,
+                                            onBack = { page = "home"; pendingNewCourse = null },
+                                            presetCell = pendingNewCourse,
+                                            onSave = { course, color ->
+                                                try {
+                                                    pushUndo()
+                                                    commit(ScheduleActions.saveCourse(data, course, color)) {
+                                                        page = "home"
+                                                        pendingNewCourse = null
+                                                    }
+                                                } catch (e: Exception) { message(e.message ?: "课程参数无效") }
+                                            },
+                                        )
                                         "periods" -> PeriodEditor(data.settings, { page = "home" }) { periods ->
                                             try {
                                                 commit(data.copy(settings = data.settings.copy(periods = periods))) { page = "home" }
@@ -325,13 +380,20 @@ fun KelaileApp() {
                                         }
                                         else -> Column(Modifier.fillMaxSize()) {
                                             MotionContent("tab$tab", Modifier.weight(1f)) { target ->
-                                                if (target == "tab0") Timetable(
+                                                when (target) {
+                                                    "tab$TAB_TIMETABLE" -> Timetable(
                                                     data = data,
                                                     scroll = scheduleScroll,
                                                     viewWeek = viewWeek,
                                                     onViewWeek = { viewWeek = it },
                                                     onCourse = { details = it },
-                                                    onAdd = { editingId = null; page = "course" },
+                                                    onAdd = { pendingNewCourse = null; editingId = null; page = "course" },
+                                                    onAddAt = { weekday, period ->
+                                                        // 空白格二次点击：直接带着星期与节次开编辑
+                                                        pendingNewCourse = weekday to period
+                                                        editingId = null
+                                                        page = "course"
+                                                    },
                                                     locatedCourseId = locatedCourseId,
                                                     onLocateHandled = { locatedCourseId = null },
                                                     onImmersive = { hidden ->
@@ -364,7 +426,8 @@ fun KelaileApp() {
                                                     canUndo = undoStack.isNotEmpty(),
                                                     onUndo = { undo() },
                                                     onRevert = { revertEdit() },
-                                                ) else SettingsPage(
+                                                )
+                                                else -> SettingsPage(
                                                     data = data,
                                                     scroll = settingsScroll,
                                                     route = settingsRoute,
@@ -373,7 +436,7 @@ fun KelaileApp() {
                                                     searchExpanded = searchOpen,
                                                     onRoute = { settingsRoute = it },
                                                     onChange = { candidate -> commit(candidate) },
-                                                    onAdd = { editingId = null; page = "course" },
+                                                    onAdd = { pendingNewCourse = null; editingId = null; page = "course" },
                                                     onPeriods = { page = "periods" },
                                                     onBrowser = { openBrowser() },
                                                     onImportTimetable = { importTimetable.launch(XLSX_MIME_TYPES) },
@@ -392,6 +455,7 @@ fun KelaileApp() {
                                                     },
                                                     bottomInset = dockOverlap,
                                                 )
+                                                }
                                             }
                                         }
                                     }
@@ -419,7 +483,7 @@ fun KelaileApp() {
                                     if (target != null) {
                                         val week = target.weeks.firstOrNull() ?: data.settings.currentWeek
                                         viewWeek = week
-                                        tab = 0
+                                        tab = TAB_TIMETABLE
                                         page = "home"
                                         locatedCourseId = id
                                     }
@@ -429,7 +493,7 @@ fun KelaileApp() {
                                     locatedCourseId = null
                                     highlightRequest = title
                                     settingsRoute = route
-                                    tab = 1
+                                    tab = TAB_SETTINGS
                                     page = "home"
                                 },
                                 onAction = { action ->
@@ -437,13 +501,13 @@ fun KelaileApp() {
                                     highlightRequest = null
                                     locatedCourseId = null
                                     when (action) {
-                                        PaletteActions.NEW_COURSE -> { editingId = null; page = "course" }
+                                        PaletteActions.NEW_COURSE -> { pendingNewCourse = null; editingId = null; page = "course" }
                                         PaletteActions.EDIT_PERIODS -> page = "periods"
                                         PaletteActions.BROWSER_IMPORT -> openBrowser()
                                         PaletteActions.IMPORT_FILE -> importTimetable.launch(XLSX_MIME_TYPES)
                                         PaletteActions.EXPORT_FILE -> exportTimetable.launch("课来了-课表.xlsx")
                                         PaletteActions.TOGGLE_THEME -> toggleTheme()
-                                        PaletteActions.OPEN_SETTINGS -> { tab = 1; page = "home" }
+                                        PaletteActions.OPEN_SETTINGS -> { tab = TAB_SETTINGS; page = "home" }
                                     }
                                 },
                             )
