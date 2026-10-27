@@ -7,27 +7,20 @@ import java.io.IOException
 
 class Repository internal constructor(
     private val directory: File,
-    private val legacy: File,
     private val storage: AtomicStorage,
 ) {
     constructor(context: Context) : this(
         context.applicationContext.filesDir,
-        File(context.applicationContext.applicationInfo.dataDir, "app_flutter/课表.json"),
         AndroidAtomicStorage(File(context.applicationContext.filesDir, "课表.json")),
     )
 
     fun load(): AppData = synchronized(lock) {
-        when {
-            nativeExists() -> readNative()
-            legacy.exists() -> decodeFile(legacy)
-            else -> AppData()
-        }
+        if (nativeExists()) readNative() else AppData()
     }
 
     fun save(data: AppData) = synchronized(lock) {
-
         val bytes = BackupCodec.encode(data).toByteArray(Charsets.UTF_8)
-        if (nativeExists()) readNative() else if (legacy.exists()) decodeFile(legacy)
+        if (nativeExists()) readNative()
         check(directory.isDirectory || directory.mkdirs()) { "无法创建数据目录" }
         storage.write(bytes)
     }
@@ -46,7 +39,6 @@ class Repository internal constructor(
 
     private fun nativeExists() = storage.exists()
     private fun readNative(): AppData = storage.openRead().use { stream -> decodeBytes(stream.readBytesLimited()) }
-    private fun decodeFile(source: File): AppData = source.inputStream().use { decodeBytes(it.readBytesLimited()) }
     private fun decodeBytes(bytes: ByteArray): AppData {
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
         return BackupCodec.decode(decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString())

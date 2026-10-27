@@ -94,6 +94,7 @@ import com.xunyyds.kelaile.ui.Section
 import com.xunyyds.kelaile.ui.SectionRow
 import com.xunyyds.kelaile.ui.LocalKelaileCanvas
 import com.xunyyds.kelaile.ui.glass.glassPanel
+import com.xunyyds.kelaile.ui.glass.glassSheen
 import com.xunyyds.kelaile.ui.highlightMatches
 import com.xunyyds.kelaile.ui.palette.PaletteEntry
 import com.xunyyds.kelaile.ui.palette.PaletteKind
@@ -202,7 +203,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier.matchParentSize()
-                    .background(LocalKelaileCanvas.current.scrim.copy(alpha = scrimAlpha.value))
+                    .background(Color.Black.copy(alpha = 0.28f * scrimAlpha.value))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -250,21 +251,24 @@ private fun SearchPane(
     val highlight = remember(accent) { SpanStyle(color = accent, fontWeight = FontWeight.Bold) }
     val canvas = LocalKelaileCanvas.current
     val fieldShape = RoundedCornerShape(radius.value.dp)
-    // 标题与搜索框合并进同一枚玻璃头卡：圆角随展开动画一起从胶囊收成直角
-    val headerShape = RoundedCornerShape(
-        topStart = radius.value.dp,
-        topEnd = radius.value.dp,
+    // 整页一体玻璃面板：顶部大圆角，与底部弹层同一套圆角体系
+    val paneShape = RoundedCornerShape(
+        topStart = KelaileShapes.sheet,
+        topEnd = KelaileShapes.sheet,
         bottomStart = 0.dp,
         bottomEnd = 0.dp,
     )
     Column(Modifier.fillMaxSize().imePadding().semantics { paneTitle = "搜索" }) {
+        // 整页一体玻璃面板：顶部大圆角贴住屏顶，头卡与结果区同材质，不再左右留缝
         Column(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 14.dp)
-                .then(KelaileElevation.soft(10.dp, headerShape, 0.04f, 0.10f))
-                .glassPanel(headerShape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom),
+                .then(
+                    KelaileElevation.soft(10.dp, paneShape, 0.04f, 0.10f),
+                )
+                .glassPanel(paneShape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
+                .glassSheen(paneShape, Color.White),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
@@ -285,7 +289,7 @@ private fun SearchPane(
             Box(
                 barModifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = 10.dp)
                     .clip(fieldShape)
                     .background(canvas.fill.copy(alpha = 0.55f)),
             ) {
@@ -298,31 +302,30 @@ private fun SearchPane(
                     shape = fieldShape,
                 )
             }
+            ResultList(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                query = query.value,
+                result = result,
+                terms = result.terms,
+                highlight = highlight,
+                historyItems = historyItems,
+                suggestions = suggestions,
+                onUseHistory = { query.value = it },
+                onRemoveHistory = {
+                    history.remove(it)
+                    onHistoryChange(history.items())
+                },
+                onClearHistory = {
+                    history.clear()
+                    onHistoryChange(history.items())
+                },
+                onPick = onPick,
+                onClear = { query.value = "" },
+                onClose = onClose,
+            )
         }
-        ResultList(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 14.dp),
-            query = query.value,
-            result = result,
-            terms = result.terms,
-            highlight = highlight,
-            historyItems = historyItems,
-            suggestions = suggestions,
-            onUseHistory = { query.value = it },
-            onRemoveHistory = {
-                history.remove(it)
-                onHistoryChange(history.items())
-            },
-            onClearHistory = {
-                history.clear()
-                onHistoryChange(history.items())
-            },
-            onPick = onPick,
-            onClear = { query.value = "" },
-            onClose = onClose,
-        )
     }
 }
 

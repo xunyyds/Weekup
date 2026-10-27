@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -390,40 +391,72 @@ fun GlassDialogScaffold(
     }
 }
 
-/** 全屏忙碌遮罩：玻璃卡片 + 进度环，取代原来的半透明黑幕。 */
+/**
+ * 「正在保存」悬浮通知：从右上角滑入弹出，保存结束后右滑退出。
+ *
+ * 入场走轻微回弹的弹簧（滑入 + 淡入 + 微缩放），退场走加速右滑淡出；
+ * 退场播完才卸载，避免闪一下就消失。
+ */
 @Composable
-fun BoxScope.GlassBusyOverlay(visible: Boolean) {
-    if (!visible) return
+fun BoxScope.SavingToast(visible: Boolean) {
+    var mounted by remember { mutableStateOf(visible) }
+    var shown by remember { mutableStateOf(visible) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            mounted = true
+            shown = true
+        } else if (mounted) {
+            shown = false
+        }
+    }
+    if (!mounted) return
     val canvas = LocalKelaileCanvas.current
-    val shape = RoundedCornerShape(KelaileShapes.card)
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, tween(KelaileMotion.quick)) }
+    val shape = RoundedCornerShape(KelaileShapes.capsule)
+    val motion = kelaileMotionEnabled()
+    val exitMillis = kelaileMillis(KelaileMotion.quick)
+    val progress = remember { Animatable(if (shown) 0f else 1f) }
+    LaunchedEffect(shown) {
+        if (shown) {
+            if (!motion) progress.snapTo(1f)
+            else progress.animateTo(
+                1f,
+                androidx.compose.animation.core.spring(
+                    dampingRatio = 0.9f,
+                    stiffness = 320f,
+                ),
+            )
+        } else {
+            if (!motion) progress.snapTo(0f)
+            else progress.animateTo(0f, tween(exitMillis, easing = KelaileMotion.accelerateEasing))
+            mounted = false
+        }
+    }
+    val eased = progress.value
     Box(
         Modifier
-            .fillMaxSize()
-            .background(canvas.scrim.copy(alpha = 0.35f * appear.value))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {},
-            )
-            .graphicsLayer { alpha = appear.value },
-        contentAlignment = Alignment.Center,
+            .align(Alignment.TopEnd)
+            .statusBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .graphicsLayer {
+                alpha = eased
+                translationX = (1f - eased) * 160.dp.toPx()
+                val s = 0.92f + 0.08f * eased
+                scaleX = s
+                scaleY = s
+            }
+            .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.05f, 0.12f))
+            .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
+            .glassSheen(shape, Color.White)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Column(
-            Modifier
-                .then(KelaileElevation.soft(KelaileElevation.floating, shape))
-                .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
-                .padding(horizontal = 26.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.CircularProgressIndicator(
-                Modifier.size(30.dp),
-                strokeWidth = 2.4.dp,
+                Modifier.size(16.dp),
+                strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Text("正在保存…", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.width(8.dp))
+            Text("正在保存…", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

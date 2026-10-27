@@ -35,12 +35,14 @@ import com.xunyyds.kelaile.ui.glass.contentSource
 import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.ui.glass.glassSheen
 import com.xunyyds.kelaile.ui.glass.glassSource
+import com.xunyyds.kelaile.ui.glass.wallpaperBlurGlass
 
 /**
- * 顶栏：悬浮玻璃胶囊。
+ * 顶栏：悬浮液态玻璃胶囊。
  *
- * 标题、副标题与右侧动作都收进同一枚胶囊里，胶囊本身只有 1dp 高光描边，
- * 靠背景渐变透出玻璃感；[collapseFraction] 让高度随滚动轻微收缩。
+ * 标题、副标题与右侧动作都收进同一枚胶囊里。胶囊用内容采样层折射
+ * （blur 比底栏重一档、不透到看不清），不支持运行时着色器时退化为
+ * 原来的半透明填充；[collapseFraction] 让高度随滚动轻微收缩。
  */
 @Composable
 fun KelaileTopBar(
@@ -58,13 +60,21 @@ fun KelaileTopBar(
     val canvas = LocalKelaileCanvas.current
     val shape = RoundedCornerShape(KelaileShapes.capsule)
     val body = expandedHeight + (collapsedHeight - expandedHeight) * f
+    val base = Modifier
+        .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
+        .wallpaperBlurGlass(
+            shape = shape,
+            tint = canvas.fillElevated.copy(alpha = if (canvas.isDark) 0.52f else 0.62f),
+            fallback = canvas.fillElevated,
+            blurDp = 18f,
+        )
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = statusBar)
             .padding(horizontal = 14.dp, vertical = 6.dp)
-            .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
-            .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
+            .then(base)
+            .glassPanel(shape, Color.Transparent, canvas.strokeTop, canvas.strokeBottom)
             .glassSheen(shape, Color.White)
             .height(body)
             .padding(start = 20.dp, end = 8.dp),
@@ -98,20 +108,30 @@ fun KelaileTopBar(
 }
 
 /**
- * 页面底色：纵向渐变 + 散景光斑。
+ * 页面底色：纵向渐变 + 散景光斑，可叠一张用户自选的课表背景图。
  *
- * 壁纸这一层挂 [glassSource]（只录背景），内容层整体再挂 [contentSource]
- * （录壁纸 + 正文，不含悬浮件），前者供卡片级透镜、后者供液态底栏折射。
- * 内容作为兄弟节点画在上面，不会被录进壁纸采样层，避免自引用。
+ * 壁纸这一层挂 [glassSource]（只录背景，含背景图），内容层整体再挂
+ * [contentSource]（录壁纸 + 正文，不含悬浮件），前者供卡片级透镜与顶栏模糊、
+ * 后者供液态底栏折射。内容作为兄弟节点画在上面，不会被录进壁纸采样层。
  */
 @Composable
 fun KelaileScreenBackground(
     modifier: Modifier = Modifier,
+    backgroundPainter: androidx.compose.ui.graphics.painter.Painter? = null,
     content: @Composable () -> Unit,
 ) {
     Box(modifier.fillMaxSize()) {
         Box(Modifier.matchParentSize().glassSource()) {
             KelaileBackdrop(Modifier.matchParentSize())
+            backgroundPainter?.let { painter ->
+                androidx.compose.foundation.Image(
+                    painter = painter,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
         Box(Modifier.matchParentSize().contentSource()) {
             content()

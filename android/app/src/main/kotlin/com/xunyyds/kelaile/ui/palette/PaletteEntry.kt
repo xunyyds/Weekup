@@ -104,7 +104,7 @@ val paletteActions: List<PaletteEntry> = listOf(
     ),
     PaletteEntry(
         id = "action:" + PaletteActions.IMPORT_FILE, kind = PaletteKind.Action, title = "导入课表文件",
-        subtitle = "兼容旧版本 JSON 备份", keywords = "恢复 JSON 备份", payload = PaletteActions.IMPORT_FILE,
+        subtitle = "从 Excel 表格导入课表", keywords = "恢复 Excel xlsx 导入", payload = PaletteActions.IMPORT_FILE,
     ),
     PaletteEntry(
         id = "action:" + PaletteActions.EDIT_PERIODS, kind = PaletteKind.Action, title = "编辑节次时间",

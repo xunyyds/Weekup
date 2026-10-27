@@ -34,9 +34,9 @@ class ScheduleService(context:Context) {
         BackupCodec.decode(text)
     }
 
-    /** 仅从 Excel 表格导入课表；旧版 JSON 备份在此明确拒绝，不做静默转换。 */
+    /** 仅从 Excel 表格导入课表；备份 JSON 在此明确拒绝，不做静默转换。 */
     suspend fun readTimetable(uri: Uri): SchoolImport = withContext(Dispatchers.IO) {
-        require(isSpreadsheet(uri)) { "课表导入仅支持 Excel（.xlsx）表格；旧版 JSON 备份不支持此入口，请改用「应用数据恢复」" }
+        require(isSpreadsheet(uri)) { "课表导入仅支持 Excel（.xlsx）表格；整套数据请改用「应用数据恢复」" }
         val stream = app.contentResolver.openInputStream(uri) ?: error("无法读取文件")
         stream.use { XlsxTimetable.parse(XlsxReader.read(it)) }
     }

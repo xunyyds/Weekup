@@ -382,3 +382,37 @@ internal fun Context.kelaileHostActivity(): Activity? = when (this) {
     is ContextWrapper -> if (baseContext !== this) baseContext.kelaileHostActivity() else null
     else -> null
 }
+
+/**
+ * 依据课表背景图的整体亮度决定状态栏字色：图亮用深字、图暗用浅字，
+ * 没有背景图时跟随主题明暗。亮度用降采样抽样求平均，避免整图解码。
+ */
+internal fun statusBarInkDarkFor(backgroundPath: String?, darkTheme: Boolean): Boolean {
+    if (backgroundPath.isNullOrBlank()) return darkTheme
+    val file = java.io.File(backgroundPath)
+    if (!file.isFile || file.length() > 24L * 1024 * 1024) return darkTheme
+    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 24 }
+    val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath, options) }
+        .getOrNull() ?: return darkTheme
+    val luminance = runCatching {
+        val step = maxOf(1, bitmap.width / 32)
+        var total = 0f
+        var count = 0
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val c = bitmap.getPixel(x, y)
+                total += 0.2126f * android.graphics.Color.red(c) +
+                    0.7152f * android.graphics.Color.green(c) +
+                    0.0722f * android.graphics.Color.blue(c)
+                count++
+                x += step
+            }
+            y += step
+        }
+        if (count == 0) 0f else total / count
+    }.getOrDefault(0f)
+    bitmap.recycle()
+    return luminance < 128f
+}

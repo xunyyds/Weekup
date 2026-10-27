@@ -195,6 +195,60 @@ internal fun Modifier.liquidGlass(radiusDp: Float, tint: Color, fallback: Color)
 @Composable
 fun rememberContentLayerBackdrop(): LayerBackdrop? = LocalContentLayerBackdrop.current
 
+/**
+ * 壁纸层实时模糊材质（顶栏等位于内容采样层内部的悬浮件用它）。
+ *
+ * 只采样 [LocalGlassBackdrop] 这层兄弟图层——它在正文之前录制完成，
+ * 因此不会出现「图层录制中又被自己采样」的自引用；比 [liquidGlass]
+ * 少了折射着色器，只做纯模糊 + 单色压面，成本更低、低版本直接回退。
+ */
+@Composable
+internal fun Modifier.wallpaperBlurGlass(
+    shape: Shape,
+    tint: Color,
+    fallback: Color,
+    blurDp: Float,
+): Modifier {
+    val backdrop = LocalGlassBackdrop.current
+    val layer = rememberGraphicsLayer()
+    var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
+    val blur = remember(blurDp) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            runCatching {
+                android.graphics.RenderEffect.createBlurEffect(
+                    blurDp,
+                    blurDp,
+                    android.graphics.Shader.TileMode.CLAMP,
+                ).asComposeRenderEffect()
+            }.getOrNull()
+        } else null
+    }
+    return this.clip(shape)
+        .onGloballyPositioned { coordinates = it }
+        .drawWithContent {
+            val source = backdrop?.coordinates
+            val target = coordinates
+            val sampled = if (blur != null && backdrop != null && backdrop.ready &&
+                source?.isAttached == true && target?.isAttached == true &&
+                drawContext.canvas.nativeCanvas.isHardwareAccelerated
+            ) {
+                runCatching {
+                    val offset = source.localPositionOf(target)
+                    layer.renderEffect = blur
+                    layer.record(
+                        size = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt()),
+                    ) {
+                        translate(-offset.x, -offset.y) { drawLayer(backdrop.layer) }
+                    }
+                    drawLayer(layer)
+                    true
+                }.getOrDefault(false)
+            } else false
+            drawRect(if (sampled) tint else fallback)
+            drawContent()
+        }
+}
+
 @androidx.annotation.RequiresApi(33)
 private class AndroidLens {
     private val shader = android.graphics.RuntimeShader(LensShader)

@@ -471,7 +471,7 @@ fun KelaileApp() {
                         .navigationBarsPadding()
                         .padding(bottom = if (dockVisible && overlayDock) 88.dp else 16.dp),
                 )
-                GlassBusyOverlay(busy)
+                SavingToast(busy)
                 KelaileSplash(visible = splashVisible)
 
                 var confirmInstall by remember { mutableStateOf(false) }

@@ -22,29 +22,25 @@ class RepositoryTest {
             this.bytes = bytes.copyOf()
         }
     }
-    @Test fun migrationReadsLegacyWithoutChangingIt() {
+    @Test fun roundTripKeepsDataIntact() {
         val root = temporary.newFolder()
-        val legacy = File(root, "legacy.json")
-        val original = BackupCodec.encode(AppData())
-        legacy.writeText(original)
         val store = MemoryAtomic()
-        val repository = Repository(root, legacy, store)
-        val data = repository.load()
-        assertEquals(0, store.writes)
+        val repository = Repository(root, store)
+        val data = AppData()
         repository.save(data)
-        assertEquals(original, legacy.readText())
         assertEquals(data, repository.load())
+    }
+    @Test fun emptyStorageLoadsDefaults() {
+        val root = temporary.newFolder()
+        val repository = Repository(root, MemoryAtomic())
+        assertEquals(AppData(), repository.load())
     }
     @Test fun corruptionNeverOverwritesExistingSource() {
         val root = temporary.newFolder()
-        val legacy = File(root, "legacy.json").apply { writeText("broken") }
         val store = MemoryAtomic()
-        val repository = Repository(root, legacy, store)
-        assertThrows(IllegalArgumentException::class.java) { repository.load() }
-        assertThrows(IllegalArgumentException::class.java) { repository.save(AppData()) }
-        assertEquals(0, store.writes)
-        assertEquals("broken", legacy.readText())
+        val repository = Repository(root, store)
         store.bytes = "bad native".toByteArray()
+        assertThrows(IllegalArgumentException::class.java) { repository.load() }
         assertThrows(IllegalArgumentException::class.java) { repository.save(AppData()) }
         assertEquals("bad native", String(store.bytes!!))
         assertEquals(0, store.writes)
@@ -52,7 +48,7 @@ class RepositoryTest {
     @Test fun failedTransactionLeavesPreviousSnapshotReadable() {
         val root = temporary.newFolder()
         val store = MemoryAtomic()
-        val repository = Repository(root, File(root, "missing"), store)
+        val repository = Repository(root, store)
         val before = AppData()
         repository.save(before)
         store.failWrite = true
@@ -62,7 +58,7 @@ class RepositoryTest {
     @Test fun invalidCandidateDoesNotReachStorage() {
         val root = temporary.newFolder()
         val store = MemoryAtomic()
-        val repository = Repository(root, File(root, "missing"), store)
+        val repository = Repository(root, store)
         val mutable = mutableListOf<CourseSession>()
         val data = AppData(courses = mutable)
         mutable += CourseSession("id", "课程", 1, 1, 2, listOf(60))
