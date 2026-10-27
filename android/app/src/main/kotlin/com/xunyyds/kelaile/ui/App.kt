@@ -55,6 +55,7 @@ import androidx.core.view.WindowCompat
 import com.xunyyds.kelaile.data.AppData
 import com.xunyyds.kelaile.data.CourseSession
 import com.xunyyds.kelaile.data.NOTE_MAX
+import com.xunyyds.kelaile.domain.AgendaActions
 import com.xunyyds.kelaile.domain.ScheduleActions
 import com.xunyyds.kelaile.ui.glass.GlassHost
 import com.xunyyds.kelaile.ui.glass.glassPanel
@@ -426,6 +427,28 @@ fun KelaileApp() {
                                                     canUndo = undoStack.isNotEmpty(),
                                                     onUndo = { undo() },
                                                     onRevert = { revertEdit() },
+                                                )
+                                                "tab$TAB_AGENDA" -> AgendaPage(
+                                                    data = data,
+                                                    bottomInset = dockOverlap,
+                                                    onSaveTodo = { todo -> pushUndo(); commit(AgendaActions.saveTodo(data, todo)) },
+                                                    onToggleTodo = { id -> commit(AgendaActions.toggleTodo(data, id)) },
+                                                    onDeleteTodo = { id -> pushUndo(); commit(AgendaActions.deleteTodo(data, id)) },
+                                                    onSaveEvent = { event -> pushUndo(); commit(AgendaActions.saveEvent(data, event)) },
+                                                    onDeleteEvent = { id -> pushUndo(); commit(AgendaActions.deleteEvent(data, id)) },
+                                                )
+                                                "tab$TAB_MEMO" -> MemoPage(
+                                                    data = data,
+                                                    bottomInset = dockOverlap,
+                                                    onSaveMemo = { id, title, body ->
+                                                        pushUndo()
+                                                        commit(
+                                                            AgendaActions.saveMemo(
+                                                                data, id, title, body, System.currentTimeMillis(),
+                                                            ),
+                                                        )
+                                                    },
+                                                    onDeleteMemo = { id -> pushUndo(); commit(AgendaActions.deleteMemo(data, id)) },
                                                 )
                                                 else -> SettingsPage(
                                                     data = data,

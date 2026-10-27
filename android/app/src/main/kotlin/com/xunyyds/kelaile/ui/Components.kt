@@ -315,6 +315,12 @@ internal fun Chevron(tint: Color) {
     }
 }
 
+/**
+ * 底栏入口文案。顺序即页面索引：0 课表、1 日程、2 备忘、3 设置。
+ * 两个 Dock 实现共用这一份，图标由 [DockGlyph] 按同一索引取形。
+ */
+private val KelaileDockLabels = listOf("课表", "日程", "备忘", "设置")
+
 @Composable
 fun KelaileDock(
     style: String,
@@ -343,7 +349,8 @@ private fun LiquidDock(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val labels = listOf("课表", "设置")
+    // 底栏四入口：0 课表 / 1 日程 / 2 备忘 / 3 设置（顺序与 DockGlyph 分支一一对应）
+    val labels = KelaileDockLabels
     val selected = index.coerceIn(labels.indices)
     val canvas = LocalKelaileCanvas.current
     val colors = MaterialTheme.colorScheme
@@ -552,7 +559,7 @@ private fun RowScope.DockTabRow(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
         ) {
-            DockGlyph(if (item == 0) 2 else 3, ink)
+            DockGlyph(item, ink)
             Text(
                 title,
                 fontSize = 11.sp,
@@ -576,8 +583,9 @@ private fun PanelDock(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val labels = listOf("课表", "设置")
+    val labels = KelaileDockLabels
     val selected = index.coerceIn(labels.indices)
+    val lastIndex = labels.lastIndex
     val solid = style == "default"
     val floating = !solid
     val colors = MaterialTheme.colorScheme
@@ -605,7 +613,10 @@ private fun PanelDock(
         animationSpec = if (motion && !dragging) spring(dampingRatio = 0.78f, stiffness = 360f) else snap(),
         label = "Dock indicator position",
     )
-    val position = (if (dragging) dragPosition else settledPosition).coerceIn(0f, 1f)
+    // position 是「浮点索引」（0f..lastIndex），不是 0..1 的比例，槽宽换算交给上层
+    val position = (if (dragging) dragPosition else settledPosition).coerceIn(0f, lastIndex.toFloat())
+    // 拖拽挤压只在中间槽位最明显，所以需要归一到 0..1 再算
+    val positionProgress = if (lastIndex > 0) (position / lastIndex).coerceIn(0f, 1f) else 0f
     val haptic = LocalHapticFeedback.current
     val base = if (solid) {
         Modifier.glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom, 0.dp)
@@ -628,27 +639,28 @@ private fun PanelDock(
                 )
                 .clip(shape).then(base).padding(if (floating) dockInset else 0.dp)
                 .onSizeChanged { measuredWidth = it.width }
-                .pointerInput(rtl) {
+                .pointerInput(rtl, labels.size) {
                     detectHorizontalDragGestures(
                         onDragStart = { start ->
-                            val slotPx = measuredWidth / 2f
+                            // 槽宽按入口数量均分，不能写死成 /2f
+                            val slotPx = measuredWidth.toFloat() / labels.size
                             if (slotPx > 0f) {
-                                val physical = (start.x / slotPx - 0.5f).coerceIn(0f, 1f)
-                                dragPosition = if (rtl) 1f - physical else physical
+                                val physical = (start.x / slotPx - 0.5f).coerceIn(0f, lastIndex.toFloat())
+                                dragPosition = if (rtl) lastIndex - physical else physical
                                 dragging = true
                             }
                         },
                         onHorizontalDrag = { change, delta ->
                             change.consume()
-                            val slotPx = measuredWidth / 2f
+                            val slotPx = measuredWidth.toFloat() / labels.size
                             if (slotPx > 0f && dragging) {
                                 val logicalDelta = delta / slotPx * if (rtl) -1f else 1f
-                                dragPosition = (dragPosition + logicalDelta).coerceIn(0f, 1f)
+                                dragPosition = (dragPosition + logicalDelta).coerceIn(0f, lastIndex.toFloat())
                                 dragStretch = abs(logicalDelta).coerceIn(0f, 0.08f)
                             }
                         },
                         onDragEnd = {
-                            val destination = dragPosition.roundToInt().coerceIn(0, 1)
+                            val destination = dragPosition.roundToInt().coerceIn(0, lastIndex)
                             dragging = false
                             dragStretch = 0f
                             if (destination != currentSelected) {
@@ -678,8 +690,9 @@ private fun PanelDock(
                         Modifier.offset(x = slot * position).width(slot).fillMaxSize()
                             .padding(KelaileSpacing.hairline)
                             .graphicsLayer {
+                                // position 已是浮点索引，挤压强度按全栏归一化后的位置算
                                 val stretch = if (motion && dragging) {
-                                    dragStretch * (1f - abs(2f * position - 1f))
+                                    dragStretch * (1f - abs(2f * positionProgress - 1f))
                                 } else 0f
                                 scaleX = 1f + stretch
                                 scaleY = 1f - stretch * 0.35f
@@ -729,7 +742,7 @@ private fun PanelDock(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(KelaileSpacing.xs),
                     ) {
-                        DockGlyph(if (item == 0) 2 else 3, ink)
+                        DockGlyph(item, ink)
                         Text(
                             title,
                             fontSize = 11.sp,
@@ -743,6 +756,12 @@ private fun PanelDock(
         }
     }
 }
+
+/**
+ * 底栏手绘图标。索引与 [KelaileDockLabels] 一一对应：
+ * 0 课表（笔记本 + 横线）、1 日程（日历 + 装订环）、2 备忘（折角便签）、3 设置（滑杆）。
+ * 统一 24 网格、1.8u 描边、圆头圆角，保证四个图标观感一致。
+ */
 @Composable
 private fun DockGlyph(index: Int, color: Color) {
     Canvas(Modifier.size(22.dp)) {
@@ -750,24 +769,45 @@ private fun DockGlyph(index: Int, color: Color) {
         val pen = Stroke(width = 1.8f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (index) {
             0 -> {
-                drawCircle(color, 8f * u, Offset(12f * u, 13f * u), style = pen)
-                drawLine(color, Offset(12f * u, 8f * u), Offset(12f * u, 13f * u), pen.width, StrokeCap.Round)
-                drawLine(color, Offset(12f * u, 13f * u), Offset(16f * u, 15f * u), pen.width, StrokeCap.Round)
-                drawLine(color, Offset(4f * u, 3f * u), Offset(7f * u, 3f * u), pen.width, StrokeCap.Round)
-                drawLine(color, Offset(17f * u, 3f * u), Offset(20f * u, 3f * u), pen.width, StrokeCap.Round)
-            }
-            1 -> {
-                drawRoundRect(color, Offset(3f * u, 4f * u), Size(18f * u, 13f * u), CornerRadius(2f * u), style = pen)
-                drawLine(color, Offset(12f * u, 17f * u), Offset(12f * u, 21f * u), pen.width, StrokeCap.Round)
-                drawLine(color, Offset(8f * u, 21f * u), Offset(16f * u, 21f * u), pen.width, StrokeCap.Round)
-            }
-            2 -> {
+                // 课表：竖版笔记本，内部三条横线当作课程行
                 drawRoundRect(color, Offset(5f * u, 3f * u), Size(14f * u, 18f * u), CornerRadius(2f * u), style = pen)
                 for (y in listOf(8f, 12f, 16f)) drawLine(
                     color, Offset(9f * u, y * u), Offset(15f * u, y * u), pen.width, StrokeCap.Round,
                 )
             }
+            1 -> {
+                // 日程：日历外框 + 顶部两个装订环 + 一条日期分隔线
+                drawRoundRect(color, Offset(3.5f * u, 5f * u), Size(17f * u, 15.5f * u), CornerRadius(2.5f * u), style = pen)
+                drawLine(color, Offset(8.5f * u, 2.5f * u), Offset(8.5f * u, 5.5f * u), pen.width, StrokeCap.Round)
+                drawLine(color, Offset(15.5f * u, 2.5f * u), Offset(15.5f * u, 5.5f * u), pen.width, StrokeCap.Round)
+                drawLine(color, Offset(4f * u, 9.5f * u), Offset(20f * u, 9.5f * u), pen.width, StrokeCap.Round)
+            }
+            2 -> {
+                // 备忘：纸张 + 右下折角 + 两条正文线
+                val folded = Path().apply {
+                    moveTo(5f * u, 3f * u)
+                    lineTo(14.5f * u, 3f * u)
+                    lineTo(19f * u, 7.5f * u)
+                    lineTo(19f * u, 21f * u)
+                    lineTo(5f * u, 21f * u)
+                    close()
+                }
+                drawPath(folded, color, style = pen)
+                drawPath(
+                    Path().apply {
+                        moveTo(14.5f * u, 3f * u)
+                        lineTo(14.5f * u, 7.5f * u)
+                        lineTo(19f * u, 7.5f * u)
+                    },
+                    color,
+                    style = pen,
+                )
+                for (y in listOf(12f, 16f)) drawLine(
+                    color, Offset(8f * u, y * u), Offset(16f * u, y * u), pen.width, StrokeCap.Round,
+                )
+            }
             else -> {
+                // 设置：三条滑杆 + 圆点
                 for ((y, x) in listOf(6f to 9f, 12f to 16f, 18f to 10f)) {
                     drawLine(color, Offset(3f * u, y * u), Offset(21f * u, y * u), pen.width, StrokeCap.Round)
                     drawCircle(color, 2.3f * u, Offset(x * u, y * u))
