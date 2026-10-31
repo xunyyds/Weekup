@@ -11,6 +11,29 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+internal data class SearchText(val title: String, val path: String, val keywords: String)
+
+internal fun searchTerms(raw: String): List<String> =
+    raw.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+
+internal fun searchScore(entry: SearchText, terms: List<String>): Int {
+    if (terms.isEmpty()) return 0
+    var score = 0
+    for (term in terms) {
+        val title = entry.title.indexOf(term, ignoreCase = true)
+        val path = entry.path.indexOf(term, ignoreCase = true)
+        val keywords = entry.keywords.indexOf(term, ignoreCase = true)
+        score += when {
+            title == 0 -> 100
+            title > 0 -> 60
+            keywords >= 0 -> 24
+            path >= 0 -> 12
+            else -> return -1
+        }
+    }
+    return score
+}
+
 class SearchPipelinePerfTest {
 
     private val courseCount = 2000
