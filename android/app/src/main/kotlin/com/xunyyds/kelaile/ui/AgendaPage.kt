@@ -1,5 +1,6 @@
 package com.xunyyds.kelaile.ui
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -238,26 +241,18 @@ fun AgendaPage(
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
+                AgendaTimeField(
+                    label = "开始",
                     value = eventStart,
-                    onValueChange = {
-                        eventStart = it.take(5)
-                        eventError = null
-                    },
-                    label = { Text("开始") },
-                    singleLine = true,
                     isError = eventError != null,
+                    onChange = { eventStart = it; eventError = null },
                     modifier = Modifier.weight(1f),
                 )
-                OutlinedTextField(
+                AgendaTimeField(
+                    label = "结束",
                     value = eventEnd,
-                    onValueChange = {
-                        eventEnd = it.take(5)
-                        eventError = null
-                    },
-                    label = { Text("结束") },
-                    singleLine = true,
                     isError = eventError != null,
+                    onChange = { eventEnd = it; eventError = null },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -280,6 +275,64 @@ fun AgendaPage(
 }
 
 /** 把 "HH:mm" 解析成当天分钟数；结束时间允许 24:00（等于当日末尾）。 */
+/** 事件时间输入：既能手打 HH:mm，也能点右侧时钟走系统时间选择器。 */
+@Composable
+private fun AgendaTimeField(
+    label: String,
+    value: String,
+    isError: Boolean,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    var choosing by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it.take(5)) },
+        label = { Text(label) },
+        singleLine = true,
+        isError = isError,
+        modifier = modifier,
+        trailingIcon = {
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .clickable { choosing = true }
+                    .semantics { contentDescription = "$label 选择时间" },
+                contentAlignment = Alignment.Center,
+            ) {
+                KelaileGlyph(
+                    KelaileGlyphKind.Clock,
+                    tint = MaterialTheme.colorScheme.primary,
+                    size = 20.dp,
+                )
+            }
+        },
+    )
+    if (choosing) {
+        DisposableEffect(context) {
+            val minutes = parseAgendaClock(value) ?: 8 * 60
+            val picker = TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    onChange(clock(hour * 60 + minute))
+                    choosing = false
+                },
+                minutes / 60,
+                minutes % 60,
+                true,
+            )
+            picker.setOnDismissListener { choosing = false }
+            picker.show()
+            onDispose {
+                picker.setOnDismissListener(null)
+                picker.dismiss()
+            }
+        }
+    }
+}
+
 private fun parseAgendaClock(raw: String): Int? {
     val match = Regex("^(\\d{1,2}):(\\d{2})$").find(raw.trim()) ?: return null
     val hour = match.groupValues[1].toIntOrNull() ?: return null

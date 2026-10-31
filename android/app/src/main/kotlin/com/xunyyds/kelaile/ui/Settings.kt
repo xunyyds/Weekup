@@ -584,10 +584,26 @@ private val Route.parent: Route
 
 private val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
 
+/** 搜索索引里的叫法与设置行标题不一致时在这里对齐，避免命中后高亮静默失效。 */
+private val highlightAliases = mapOf(
+    "外观" to "主题颜色",
+    "课程表外观" to "背景图片",
+    "动效设置" to "动画速度",
+    "显示设置" to "字体大小",
+    "数据与备份" to "备份应用数据",
+    "网格线样式" to "网格模式",
+    "课程表背景" to "背景图片",
+    "应用数据备份" to "备份应用数据",
+    "应用数据恢复" to "恢复应用数据",
+    "课表导入" to "导入课表（Excel）",
+    "课表导出" to "导出课表（Excel）",
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SettingsTarget(title: String, content: @Composable () -> Unit) {
-    val selected = LocalSettingsHighlight.current == title
+    val request = LocalSettingsHighlight.current
+    val selected = request != null && (request == title || highlightAliases[request] == title)
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(selected) {
         if (selected) {
