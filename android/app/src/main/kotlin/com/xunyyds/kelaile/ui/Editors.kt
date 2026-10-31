@@ -404,27 +404,27 @@ fun PeriodEditor(settings: AppSettings, onBack: () -> Unit, onSave: (List<Period
                     }
                 }
             }
-            val canvas = LocalKelaileCanvas.current
-            periods.forEachIndexed { index, period ->
-                val shape = RoundedCornerShape(KelaileShapes.small)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .then(KelaileElevation.soft(3.dp, shape, 0.02f, 0.05f))
-                        .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
-                        .padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("第 ${period.period} 节", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "${editorTime(period.startMinutes)} – ${editorTime(period.endMinutes)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            Section("节次") {
+                periods.forEachIndexed { index, period ->
+                    SectionRow {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("第 ${period.period} 节", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "${editorTime(period.startMinutes)} – ${editorTime(period.endMinutes)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(onClick = { open(index) }) { Text("修改") }
+                            TextButton(onClick = { periods = periods.filterIndexed { i, _ -> i != index }; error = null }) { Text("删除") }
+                        }
                     }
-                    TextButton(onClick = { open(index) }) { Text("修改") }
-                    TextButton(onClick = { periods = periods.filterIndexed { i, _ -> i != index }; error = null }) { Text("删除") }
                 }
             }
             if (periods.isEmpty()) {
