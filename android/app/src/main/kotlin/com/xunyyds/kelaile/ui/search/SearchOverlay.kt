@@ -561,13 +561,7 @@ private fun SearchLineRow(
             .fillMaxWidth()
             .heightIn(min = if (subHighlighted.text.isBlank()) 54.dp else 68.dp)
             .clip(RoundedCornerShape(KelaileShapes.card))
-            .selectable(
-                selected = false,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

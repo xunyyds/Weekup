@@ -50,6 +50,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -344,7 +346,14 @@ fun KelaileApp() {
                 ) {
                     if (ready) {
                         SharedTransitionLayout {
-                            Column(Modifier.fillMaxSize()) {
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .then(
+                                        if (searchOpen) Modifier.semantics { invisibleToUser() }
+                                        else Modifier,
+                                    ),
+                            ) {
                                 if (busy) {
                                     androidx.compose.material3.LinearProgressIndicator(
                                         Modifier.fillMaxWidth().height(2.dp),
