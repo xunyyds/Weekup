@@ -167,7 +167,7 @@ fun MotionContent(
                         fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
                     ).using(null)
                 else -> {
-                    val direction = if (targetState >= initialState) 1 else -1
+                    val direction = navigationDirection(initialState, targetState)
                     val travel = if (style == "standard") .10f else .045f
                     val enter = slideInHorizontally(
                         tween(enterMillis, easing = KelaileMotion.emphasizedEasing),
@@ -187,4 +187,24 @@ fun MotionContent(
         },
         label = "Kelaile shared axis",
     ) { destination -> content(destination) }
+}
+
+/**
+ * 转场方向按页面层级而不是字符串字典序决定：进入下一层右滑入，返回上一层左滑出。
+ * tab 之间仍按索引差判断，保证和底栏顺序一致。
+ */
+private fun navigationDirection(from: String, to: String): Int {
+    if (from.startsWith("tab") && to.startsWith("tab")) {
+        val a = from.removePrefix("tab").toIntOrNull() ?: 0
+        val b = to.removePrefix("tab").toIntOrNull() ?: 0
+        return if (b >= a) 1 else -1
+    }
+    return if (routeDepth(to) >= routeDepth(from)) 1 else -1
+}
+
+private fun routeDepth(route: String): Int = when (route) {
+    "home", "root" -> 0
+    "course", "periods", "browser",
+    "appearance", "display", "semester", "courses", "reminders", "data", "about" -> 1
+    else -> 2
 }

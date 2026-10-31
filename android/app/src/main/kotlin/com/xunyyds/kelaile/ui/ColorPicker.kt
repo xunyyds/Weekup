@@ -151,7 +151,7 @@ fun ColorPickerDialog(
                                     preset,
                                     Modifier
                                         .weight(1f)
-                                        .height(32.dp)
+                                        .aspectRatio(1f)
                                         .clip(KelaileShapes.rounded(KelaileShapes.xs))
                                         .border(
                                             if (color == preset) 3.dp else 1.dp,
@@ -197,7 +197,7 @@ private fun ColorChannelSlider(label: String, value: Float, range: ClosedFloatin
             Text(display, style = MaterialTheme.typography.labelMedium)
         }
         Slider(value = value, onValueChange = onChange, valueRange = range,
-            modifier = Modifier.fillMaxWidth().height(32.dp).semantics { contentDescription = label })
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label })
     }
 }
 

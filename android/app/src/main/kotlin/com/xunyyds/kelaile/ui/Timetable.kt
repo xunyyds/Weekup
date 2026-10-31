@@ -362,8 +362,11 @@ fun Timetable(
         }
     }
 
-    val gutterPx = with(density) { gutterWidth.toPx() }
-    val headerPx = with(density) { dayHeaderHeight.toPx() }
+    val uiScale = s.density.toFloat()
+    val gutterDp = gutterWidth * uiScale
+    val headerDp = dayHeaderHeight * uiScale
+    val gutterPx = with(density) { gutterDp.toPx() }
+    val headerPx = with(density) { headerDp.toPx() }
     val week = viewWeek.coerceIn(1, s.weekCount)
 
     val slide = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -374,6 +377,7 @@ fun Timetable(
     }
     val canvasColors = LocalKelaileCanvas.current
     val palette = rememberGridPalette(s)
+    val cellPadding = gridCellPadding(palette.lineStyle) * uiScale
     val styles = remember(projection, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor) {
         projection.placed.values.asSequence().flatten()
             .associate {
@@ -936,8 +940,8 @@ fun Timetable(
                     verticalAlignment = Alignment.Top,
                 ) {
 
-                    Column(Modifier.width(gutterWidth)) {
-                        Spacer(Modifier.height(dayHeaderHeight))
+                    Column(Modifier.width(gutterDp)) {
+                        Spacer(Modifier.height(headerDp))
 
                         Column(
                             Modifier
@@ -1026,7 +1030,7 @@ fun Timetable(
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .height(dayHeaderHeight)
+                                .height(headerDp)
                                 .clipToBounds()
                                 .background(palette.header),
                         ) {
@@ -1037,7 +1041,7 @@ fun Timetable(
                                 Box(
                                     Modifier
                                         .offset { IntOffset((dayIndex * cellWpx - grid.offsetX).roundToInt(), 0) }
-                                        .requiredWidth(cellDp).height(dayHeaderHeight)
+                                        .requiredWidth(cellDp).height(headerDp)
                                         .then(
                                             if (marked) Modifier.background(
                                                 MaterialTheme.colorScheme.primary.copy(alpha = .18f),
@@ -1136,7 +1140,6 @@ fun Timetable(
                                         .clipToBounds()
                                         .graphicsLayer { translationY = -grid.offsetY.roundToInt().toFloat() },
                                 ) {
-                                        val cellPadding = gridCellPadding(palette.lineStyle)
                                         androidx.compose.foundation.Canvas(
                                             Modifier
                                                 .fillMaxWidth()
@@ -1187,7 +1190,7 @@ fun Timetable(
                                                 .height(with(density) { (cellHpx * (pc.endIndex - pc.startIndex + 1)).toDp() })
                                                 // 与空白格用同一份内缩：卡片外缘正好落在格子外缘上，
                                                 // 不会露出一圈比格子底色更深的缝
-                                                .padding(gridCellPadding(palette.lineStyle))
+                                                .padding(cellPadding)
                                                 .then(
                                                     if (dragging?.course?.id == course.id) Modifier.alpha(.28f)
                                                     else Modifier
@@ -1333,7 +1336,7 @@ fun Timetable(
                                 .offset { IntOffset(0, lineY.roundToInt()) }
                                 .fillMaxWidth()
                                 .height(1.5.dp)
-                                .padding(start = gutterWidth)
+                                .padding(start = gutterDp)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = .9f)),
                         )
                     }
@@ -1347,7 +1350,7 @@ fun Timetable(
                             .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
                             .width(with(density) { (cellWpx / ghost.laneCount.coerceAtLeast(1)).toDp() })
                             .height(with(density) { (cellHpx * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
-                            .padding(gridCellPadding(palette.lineStyle))
+                            .padding(cellPadding)
                             .then(
                                 Modifier
                                     .graphicsLayer { alpha = .92f }
@@ -1375,7 +1378,7 @@ fun Timetable(
                                 ) }
                                 .width(with(density) { cellWpx.toDp() })
                                 .height(with(density) { cellHpx.toDp() })
-                                .padding(gridCellPadding(palette.lineStyle))
+                                .padding(cellPadding)
                                 .background(accent.copy(alpha = .14f), cellShape)
                                 .border(1.5.dp, accent.copy(alpha = .72f), cellShape),
                             contentAlignment = Alignment.Center,
@@ -1418,7 +1421,7 @@ fun Timetable(
                             ) }
                             .width(with(density) { cellWpx.toDp() })
                             .height(with(density) { cellHpx.toDp() })
-                            .padding(gridCellPadding(palette.lineStyle))
+                            .padding(cellPadding)
                             .background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = .16f),
                                 androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),

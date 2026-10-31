@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,9 @@ import com.xunyyds.kelaile.core.platform.AppPlatform
 import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.ui.glass.glassSheen
 import com.xunyyds.kelaile.ui.update.UpdateController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ApkShareProvider : FileProvider()
 
@@ -63,6 +67,7 @@ fun shareInstalledApk(context: Context) = ApkSharing.shareInstalledApk(context)
 @Composable
 fun AboutContent(update: UpdateController) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var licenses by remember { mutableStateOf<String?>(null) }
     var licenseTitle by remember { mutableStateOf("开源许可") }
     var info by remember(context) { mutableStateOf<AppMetadata?>(null) }
@@ -124,7 +129,11 @@ fun AboutContent(update: UpdateController) {
             }
             AboutLinkTile(KelaileGlyphKind.Book, "第三方许可证", "依赖组件的许可全文") {
                 licenseTitle = "第三方许可证"
-                licenses = "$creditText\n\n${AppPlatform.readLicenseSync(context)}"
+                licenses = "读取中…"
+                scope.launch {
+                    val text = withContext(Dispatchers.IO) { AppPlatform.readLicenseSync(context) }
+                    licenses = "$creditText\n\n$text"
+                }
             }
         }
         SettingsFooterPhrase("课来了是一个开源的课程表应用，感谢每一位用户与贡献者。")

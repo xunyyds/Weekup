@@ -119,6 +119,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
     val keyboard = LocalSoftwareKeyboardController.current
     val motion = kelaileMotionEnabled()
     val focusRequester = remember { FocusRequester() }
+    val canvas = LocalKelaileCanvas.current
 
     val query = rememberSaveable { mutableStateOf("") }
 
@@ -203,7 +204,7 @@ fun SharedTransitionScope.KelaileSearchOverlay(
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier.matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.28f * scrimAlpha.value))
+                    .background(canvas.scrim.copy(alpha = canvas.scrim.alpha * scrimAlpha.value))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -263,12 +264,12 @@ private fun SearchPane(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .then(
                     KelaileElevation.soft(10.dp, paneShape, 0.04f, 0.10f),
                 )
                 .glassPanel(paneShape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
-                .glassSheen(paneShape, Color.White),
+                .glassSheen(paneShape, Color.White)
+                .statusBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
