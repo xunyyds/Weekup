@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,6 +99,7 @@ fun KelaileApp() {
     var settingsRoute by rememberSaveable { mutableStateOf("root") }
     val scheduleScroll = androidx.compose.foundation.rememberScrollState()
     val settingsScroll = androidx.compose.foundation.rememberScrollState()
+    val tabStateHolder = rememberSaveableStateHolder()
     val editing = data.courses.firstOrNull { it.id == editingId }
     var details by remember { mutableStateOf<CourseSession?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -414,6 +416,7 @@ fun KelaileApp() {
                                         }
                                         else -> Column(Modifier.fillMaxSize()) {
                                             MotionContent("tab$tab", Modifier.weight(1f)) { target ->
+                                                tabStateHolder.SaveableStateProvider(target) {
                                                 when (target) {
                                                     "tab$TAB_TIMETABLE" -> Timetable(
                                                     data = data,
@@ -518,6 +521,7 @@ fun KelaileApp() {
                                                     bottomInset = dockOverlap,
                                                 )
                                                 }
+                                            }
                                             }
                                         }
                                     }

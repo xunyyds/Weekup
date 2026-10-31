@@ -460,7 +460,8 @@ fun Timetable(
     val velocityTracker = remember { VelocityTracker() }
 
     LaunchedEffect(layout) {
-        grid.clampInto(layout)
+        // 首次布局拿到的 availW 还是占位值，等 onSizeChanged 给出真实尺寸后再夹紧
+        if (layout.availW > 1f && layout.availH > 1f) grid.clampInto(layout)
     }
 
     LaunchedEffect(week) {

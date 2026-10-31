@@ -42,7 +42,8 @@ internal data class GridLayout(
     val minZoom: Float
         get() {
             val fit = availW / dayCount.coerceAtLeast(1)
-            if (minCellPx <= 0f || fit <= 0f) return GRID_MIN_ZOOM
+            // 首帧还没测量到真实宽度时 availW 只有 1px，不能据此把缩放顶到最大值
+            if (minCellPx <= 0f || fit <= 1f) return GRID_MIN_ZOOM
             return (minCellPx / fit).coerceIn(GRID_MIN_ZOOM, GRID_MAX_ZOOM)
         }
 
