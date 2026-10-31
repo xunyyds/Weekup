@@ -232,8 +232,8 @@ private fun rememberRowSlot(): Pair<Int, Boolean> {
  */
 @Composable
 internal fun SectionRow(alwaysDivider: Boolean = false, content: @Composable () -> Unit) {
-    val (slot, isFirst) = rememberRowSlot()
-    Column(Modifier.fillMaxWidth().staggerEnter(kelaileStaggerDelay(slot))) {
+    val (_, isFirst) = rememberRowSlot()
+    Column(Modifier.fillMaxWidth()) {
         if (alwaysDivider || !isFirst) SectionDivider()
         content()
     }
@@ -249,7 +249,7 @@ fun SettingRow(
 ) {
     val haptic = LocalHapticFeedback.current
     val motion = kelaileMotionEnabled()
-    val (slot, isFirst) = rememberRowSlot()
+    val (_, isFirst) = rememberRowSlot()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val canvas = LocalKelaileCanvas.current
@@ -259,7 +259,7 @@ fun SettingRow(
         animationSpec = if (motion) tween(KelaileMotion.fast) else snap(),
         label = "Row tone",
     )
-    Column(Modifier.fillMaxWidth().staggerEnter(kelaileStaggerDelay(slot))) {
+    Column(Modifier.fillMaxWidth()) {
         if (!isFirst) SectionDivider()
         Row(
             modifier = Modifier

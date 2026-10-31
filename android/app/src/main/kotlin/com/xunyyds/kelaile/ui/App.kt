@@ -101,6 +101,7 @@ fun KelaileApp() {
     val editing = data.courses.firstOrNull { it.id == editingId }
     var details by remember { mutableStateOf<CourseSession?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var missingSchoolUrl by remember { mutableStateOf(false) }
 
     var viewWeek by remember { mutableIntStateOf(1) }
     var immersive by remember { mutableStateOf(false) }
@@ -110,7 +111,15 @@ fun KelaileApp() {
     var highlightRequest by remember { mutableStateOf<String?>(null) }
     var locatedCourseId by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
-    fun message(text: String) { scope.launch { snackbar.showSnackbar(text) } }
+    fun message(text: String) {
+        scope.launch {
+            snackbar.showSnackbar(
+                message = text,
+                withDismissAction = true,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
     fun commit(candidate: AppData, onSaved: () -> Unit = {}) {
         if (busy) { message("正在保存，请稍候重试"); return }
         busy = true
@@ -278,7 +287,7 @@ fun KelaileApp() {
     }
     fun openBrowser() {
         val uri = android.net.Uri.parse(data.settings.schoolUrl)
-        if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) message("请先填写有效的教务网址")
+        if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) missingSchoolUrl = true
         else page = "browser"
     }
     fun toggleTheme() {
@@ -588,8 +597,24 @@ fun KelaileApp() {
                         .navigationBarsPadding()
                         .padding(bottom = if (dockVisible && overlayDock) 88.dp else 16.dp),
                 )
-                SavingToast(busy)
+                SavingToast(busy, bottomInset = if (dockVisible && overlayDock) 96.dp else 16.dp)
                 KelaileSplash(visible = splashVisible)
+
+                KelaileDialog(
+                    visible = missingSchoolUrl,
+                    onDismiss = { missingSchoolUrl = false },
+                    title = "还没有填写教务网址",
+                    message = "导入课表前需要先填写学校教务入口。可以在「设置 → 数据与备份 → 教务网址」里补上。",
+                    confirmLabel = "去填写",
+                    onConfirm = {
+                        missingSchoolUrl = false
+                        tab = TAB_SETTINGS
+                        page = "home"
+                        settingsRoute = "data"
+                        highlightRequest = "教务网址"
+                    },
+                    dismissLabel = "取消",
+                )
 
                 var confirmInstall by remember { mutableStateOf(false) }
                 KelaileDialog(

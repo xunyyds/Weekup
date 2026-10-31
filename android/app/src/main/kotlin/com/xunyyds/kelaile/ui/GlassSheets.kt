@@ -47,8 +47,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
@@ -410,7 +412,7 @@ fun GlassDialogScaffold(
  * 退场播完才卸载，避免闪一下就消失。
  */
 @Composable
-fun BoxScope.SavingToast(visible: Boolean) {
+fun BoxScope.SavingToast(visible: Boolean, bottomInset: Dp = 16.dp) {
     var mounted by remember { mutableStateOf(visible) }
     var shown by remember { mutableStateOf(visible) }
     LaunchedEffect(visible) {
@@ -418,6 +420,8 @@ fun BoxScope.SavingToast(visible: Boolean) {
             mounted = true
             shown = true
         } else if (mounted) {
+            // 保存可能只花几十毫秒；给提示一个最短展示时间，避免一闪而过
+            delay(900)
             shown = false
         }
     }
@@ -446,12 +450,13 @@ fun BoxScope.SavingToast(visible: Boolean) {
     val eased = progress.value
     Box(
         Modifier
-            .align(Alignment.TopEnd)
-            .statusBarsPadding()
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
             .padding(horizontal = 18.dp, vertical = 10.dp)
+            .padding(bottom = bottomInset)
             .graphicsLayer {
                 alpha = eased
-                translationX = (1f - eased) * 160.dp.toPx()
+                translationY = (1f - eased) * 18.dp.toPx()
                 val s = 0.92f + 0.08f * eased
                 scaleX = s
                 scaleY = s
