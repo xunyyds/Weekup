@@ -172,11 +172,12 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
             Text(
                 title,
                 modifier = Modifier
-                    .padding(horizontal = KelaileSpacing.xl + 2.dp)
+                    .padding(horizontal = 18.dp)
                     .semantics { heading() },
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
-                letterSpacing = 0.2.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp,
             )
         }
         Box(
@@ -290,12 +291,12 @@ fun SettingRow(
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             Spacer(Modifier.width(KelaileSpacing.lg))
-            Chevron(if (canvas.isDark) Color.White.copy(alpha = 0.34f) else Color(0xFF1B2230).copy(alpha = 0.26f))
+            Chevron(canvas.divider)
         }
     }
 }
@@ -1348,6 +1349,7 @@ fun GlassPillButton(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.primary,
     compact: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val canvas = LocalKelaileCanvas.current
     val shape = RoundedCornerShape(KelaileShapes.capsule)
@@ -1357,16 +1359,26 @@ fun GlassPillButton(
         modifier
             .then(KelaileElevation.soft(4.dp, shape, 0.02f, 0.05f))
             .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
-            .background(tint.copy(alpha = if (pressed) .16f else .08f))
-            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
-            .heightIn(min = if (compact) 32.dp else 38.dp)
+            .background(tint.copy(alpha = when {
+                !enabled -> .04f
+                pressed -> .16f
+                else -> .08f
+            }))
+            .clickable(
+                enabled = enabled,
+                interactionSource = source,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .heightIn(min = if (compact) 40.dp else 44.dp)
             .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 6.dp else 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = tint,
+            color = if (enabled) tint else tint.copy(alpha = .42f),
             maxLines = 1,
         )
     }

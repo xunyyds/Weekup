@@ -25,8 +25,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -142,6 +144,19 @@ fun KelaileApp() {
         val previous = undoStack.lastOrNull() ?: return
         undoStack = undoStack.dropLast(1)
         commit(previous)
+    }
+    fun commitWithUndo(message: String, next: AppData) {
+        pushUndo()
+        commit(next)
+        scope.launch {
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                withDismissAction = true,
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) undo()
+        }
     }
 
     fun applyMove(move: Triple<String, String, Pair<Int, Int>>, mode: ScheduleActions.MoveMode) {
@@ -433,9 +448,13 @@ fun KelaileApp() {
                                                     bottomInset = dockOverlap,
                                                     onSaveTodo = { todo -> pushUndo(); commit(AgendaActions.saveTodo(data, todo)) },
                                                     onToggleTodo = { id -> commit(AgendaActions.toggleTodo(data, id)) },
-                                                    onDeleteTodo = { id -> pushUndo(); commit(AgendaActions.deleteTodo(data, id)) },
+                                                    onDeleteTodo = { id ->
+                                                        commitWithUndo("已删除待办", AgendaActions.deleteTodo(data, id))
+                                                    },
                                                     onSaveEvent = { event -> pushUndo(); commit(AgendaActions.saveEvent(data, event)) },
-                                                    onDeleteEvent = { id -> pushUndo(); commit(AgendaActions.deleteEvent(data, id)) },
+                                                    onDeleteEvent = { id ->
+                                                        commitWithUndo("已删除事件", AgendaActions.deleteEvent(data, id))
+                                                    },
                                                 )
                                                 "tab$TAB_MEMO" -> MemoPage(
                                                     data = data,
@@ -448,7 +467,9 @@ fun KelaileApp() {
                                                             ),
                                                         )
                                                     },
-                                                    onDeleteMemo = { id -> pushUndo(); commit(AgendaActions.deleteMemo(data, id)) },
+                                                    onDeleteMemo = { id ->
+                                                        commitWithUndo("已删除备忘", AgendaActions.deleteMemo(data, id))
+                                                    },
                                                 )
                                                 else -> SettingsPage(
                                                     data = data,
@@ -749,6 +770,7 @@ private fun CourseDetailSheet(
         title = "删除课程？",
         message = "此操作会删除 ${course.name}，建议先导出备份。",
         confirmLabel = "删除",
+        destructive = true,
         onConfirm = { confirmDelete = false; onDelete() },
         dismissLabel = "取消",
     )

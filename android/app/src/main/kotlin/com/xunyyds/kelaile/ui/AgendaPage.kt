@@ -336,7 +336,7 @@ private fun TodoCheck(done: Boolean, onToggle: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     Box(
         Modifier
-            .size(26.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .clickable(role = Role.Checkbox) {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -456,11 +456,7 @@ internal fun KelaileDeleteButton(description: String, onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     Box(
         Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .background(
-                if (canvas.isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-            )
+            .size(48.dp)
             .clickable(role = Role.Button) {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
@@ -468,11 +464,21 @@ internal fun KelaileDeleteButton(description: String, onClick: () -> Unit) {
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        KelaileGlyph(
-            KelaileGlyphKind.Close,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            size = 13.dp,
-        )
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(
+                    if (canvas.isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            KelaileGlyph(
+                KelaileGlyphKind.Close,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 13.dp,
+            )
+        }
     }
 }
 

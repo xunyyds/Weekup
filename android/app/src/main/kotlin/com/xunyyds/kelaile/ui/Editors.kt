@@ -93,6 +93,7 @@ fun CourseEditor(
         start != (course?.startPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1) ||
         end != (course?.endPeriod ?: presetCell?.second ?: availablePeriods.firstOrNull() ?: 1) ||
         weeks != initialWeeks ||
+        parity != 0 ||
         selectedColor != (initialColor and 0xffffffffL)
     fun requestBack() {
         if (dirty) confirmLeave = true else onBack()
@@ -299,7 +300,7 @@ private fun WeekdayPicker(weekday: Int, onChange: (Int) -> Unit) {
                         else LocalKelaileCanvas.current.fillSunken,
                     )
                     .clickable { onChange(day) }
-                    .heightIn(min = 42.dp),
+                    .heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -581,12 +582,12 @@ private fun EditorHeader(title: String, onBack: () -> Unit, onSave: () -> Unit) 
             .padding(horizontal = 14.dp, vertical = 6.dp)
             .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
             .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
-            .height(50.dp)
+            .heightIn(min = 50.dp)
             .padding(start = 6.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(38.dp).clip(CircleShape).clickable(onClick = onBack),
+            Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onBack),
             contentAlignment = Alignment.Center,
         ) { KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface) }
         Spacer(Modifier.width(4.dp))

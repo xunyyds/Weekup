@@ -526,20 +526,27 @@ private fun SettingsSubHeader(title: String, onBack: () -> Unit) {
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(horizontal = 14.dp, vertical = 8.dp)
-            .height(44.dp),
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .size(36.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(
-                    if (canvas.isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-                )
                 .clickable(onClick = onBack)
                 .semantics { contentDescription = "返回上一级" },
             contentAlignment = Alignment.Center,
-        ) { KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface) }
+        ) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (canvas.isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) { KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface) }
+        }
         Spacer(Modifier.width(10.dp))
         Text(
             title,

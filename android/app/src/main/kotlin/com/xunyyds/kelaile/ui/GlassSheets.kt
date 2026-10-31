@@ -265,6 +265,7 @@ fun KelaileDialog(
     message: String? = null,
     dismissOnOutside: Boolean = true,
     confirmLabel: String = "好",
+    destructive: Boolean = false,
     onConfirm: (() -> Unit)? = null,
     dismissLabel: String? = null,
     onDismissAction: (() -> Unit)? = null,
@@ -279,7 +280,7 @@ fun KelaileDialog(
         dismissOnBackPress = true,
     ) { progress ->
         val eased = if (motion) progress else 1f
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().imePadding(), contentAlignment = Alignment.Center) {
             OverlayScrim(
                 alpha = eased,
                 onClick = if (dismissOnOutside) onDismiss else null,
@@ -289,6 +290,7 @@ fun KelaileDialog(
                     .padding(horizontal = 26.dp)
                     .widthIn(max = 420.dp)
                     .fillMaxWidth()
+                    .heightIn(max = 520.dp)
                     .graphicsLayer {
                         alpha = eased
                         val s = 0.94f + 0.06f * eased
@@ -309,7 +311,15 @@ fun KelaileDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                content?.let { Column(verticalArrangement = Arrangement.spacedBy(10.dp), content = it) }
+                content?.let {
+                    Column(
+                        Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        content = it,
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -322,6 +332,8 @@ fun KelaileDialog(
                     GlassPillButton(
                         confirmLabel,
                         onClick = { onConfirm?.invoke() ?: onDismiss() },
+                        tint = if (destructive) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
                     )
                 }
             }

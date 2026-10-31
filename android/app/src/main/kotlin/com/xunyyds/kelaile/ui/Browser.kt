@@ -462,6 +462,7 @@ fun BrowserImport(url: String, onBack: () -> Unit, existingSchool: String = "", 
         title = "清除登录会话？",
         message = "将清除应用内 WebView 的全部 Cookie、网页本地存储及缓存，可能退出其他学校网站的登录。无法撤销。",
         confirmLabel = "清除",
+        destructive = true,
         onConfirm = {
             confirmClear = false
             val browser = webView
@@ -565,12 +566,12 @@ private fun BrowserToolbar(
                 .fillMaxWidth()
                 .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
                 .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
-                .height(50.dp)
+                .heightIn(min = 50.dp)
                 .padding(start = 6.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(38.dp).clip(CircleShape).clickable(onClick = onBack),
+                Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) { KelaileGlyph(KelaileGlyphKind.Back, MaterialTheme.colorScheme.onSurface) }
             Spacer(Modifier.width(4.dp))
@@ -596,7 +597,7 @@ private fun BrowserToolbar(
             Spacer(Modifier.width(4.dp))
             Box {
                 Box(
-                    Modifier.size(34.dp).clip(CircleShape).clickable { menu = true },
+                    Modifier.size(48.dp).clip(CircleShape).clickable { menu = true },
                     contentAlignment = Alignment.Center,
                 ) { Text("⋯", style = MaterialTheme.typography.titleMedium) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

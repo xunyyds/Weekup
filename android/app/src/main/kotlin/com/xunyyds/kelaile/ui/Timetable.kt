@@ -1,10 +1,13 @@
 package com.xunyyds.kelaile.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -19,13 +22,19 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
@@ -39,7 +48,9 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +65,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -70,7 +81,10 @@ private const val GRID_BOTTOM_ROWS = 2
 
 private val gutterWidth = 42.dp
 
-private val dayHeaderHeight = 38.dp
+private val dayHeaderHeight = 44.dp
+
+/** 单列可读下限：7 天全开时不再把课程名压到 7sp，而是默认允许横向滚动。 */
+private val minColumnWidth = 56.dp
 
 private data class CourseStyle(val background: Color, val ink: Color)
 
@@ -237,20 +251,24 @@ private fun DashedGridLines(
     modifier: Modifier = Modifier,
 ) {
     if (columns <= 0 || rows <= 0) return
-    androidx.compose.foundation.Canvas(modifier) {
-        val width = 1.dp.toPx()
-        val effect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
-        val totalY = cellH * rows
-        for (c in 1 until columns) {
-            val x = c * cellW
-            drawLine(color, Offset(x, 0f), Offset(x, totalY), strokeWidth = width, pathEffect = effect)
-        }
-        val totalX = cellW * columns
-        for (r in 1 until rows) {
-            val y = r * cellH
-            drawLine(color, Offset(0f, y), Offset(totalX, y), strokeWidth = width, pathEffect = effect)
-        }
-    }
+    androidx.compose.foundation.layout.Spacer(
+        modifier.drawWithCache {
+            val width = 1.dp.toPx()
+            val effect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
+            val totalY = cellH * rows
+            val totalX = cellW * columns
+            onDrawBehind {
+                for (c in 1 until columns) {
+                    val x = c * cellW
+                    drawLine(color, Offset(x, 0f), Offset(x, totalY), strokeWidth = width, pathEffect = effect)
+                }
+                for (r in 1 until rows) {
+                    val y = r * cellH
+                    drawLine(color, Offset(0f, y), Offset(totalX, y), strokeWidth = width, pathEffect = effect)
+                }
+            }
+        },
+    )
 }
 
 private fun courseVisual(
@@ -305,7 +323,15 @@ fun Timetable(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val snapMillis = kelaileMillis(240)
-    val today = LocalDate.now()
+    var nowTick by remember { mutableStateOf(java.time.LocalDateTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowTick = java.time.LocalDateTime.now()
+            delay(30_000)
+        }
+    }
+    val today = nowTick.toLocalDate()
+    val nowMinute = nowTick.hour * 60 + nowTick.minute
 
     var boxW by remember { mutableIntStateOf(0) }
     var viewportH by remember { mutableIntStateOf(0) }
@@ -329,6 +355,12 @@ fun Timetable(
 
     // 空白格两步点击：第一次点亮加号，第二次才进编辑。排课模式下同样走这一套。
     var tappedCell by remember { mutableStateOf<GridCell?>(null) }
+    LaunchedEffect(tappedCell) {
+        if (tappedCell != null) {
+            delay(6_000)
+            tappedCell = null
+        }
+    }
 
     val gutterPx = with(density) { gutterWidth.toPx() }
     val headerPx = with(density) { dayHeaderHeight.toPx() }
@@ -357,8 +389,9 @@ fun Timetable(
     val noGrid = palette.lineStyle == GRID_LINE_NONE
     // 底部统一预留约两节课的高度，任何一种网格模式下最后一节课都能滚到底栏之上
     val bottomRows = GRID_BOTTOM_ROWS
-    val layout = remember(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows) {
-        GridLayout(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows)
+    val minColumnPx = with(density) { minColumnWidth.toPx() }
+    val layout = remember(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows, minColumnPx) {
+        GridLayout(dayCount, periodCount, availW, availH, gutterPx, headerPx, bottomRows, minColumnPx)
     }
     val zoom = grid.zoom
     val cellW = layout.cellWidth(zoom)
@@ -367,6 +400,48 @@ fun Timetable(
     // 否则浮点 cellW 逐列累积半像素，网格线会和格子边缘错位。
     val cellWpx = cellW.roundToInt().coerceAtLeast(1)
     val cellHpx = cellH.roundToInt().coerceAtLeast(1)
+
+    val todayWeekday = today.dayOfWeek.value
+    val isCurrentWeek = week == s.currentWeek
+    val todayCourses = projection.placed[todayWeekday].orEmpty().sortedBy { it.startIndex }
+    val nowRow = s.periods.indexOfFirst { nowMinute >= it.startMinutes && nowMinute < it.endMinutes }
+    val currentCourse = if (nowRow >= 0) {
+        todayCourses.firstOrNull { nowRow in it.startIndex..it.endIndex }
+    } else {
+        null
+    }
+    val nextCourse = todayCourses.firstOrNull { placed ->
+        val startMinutes = s.periods.getOrNull(placed.startIndex)?.startMinutes ?: return@firstOrNull false
+        startMinutes > nowMinute
+    }
+    val remainingMinutes = currentCourse?.let { placed ->
+        s.periods.getOrNull(placed.endIndex)?.endMinutes?.minus(nowMinute)
+    }
+    val nowLineY = when {
+        nowRow >= 0 -> {
+            val period = s.periods[nowRow]
+            val fraction = (nowMinute - period.startMinutes).toFloat() /
+                (period.endMinutes - period.startMinutes).coerceAtLeast(1)
+            (nowRow + fraction) * cellHpx
+        }
+        nowMinute < s.periods.first().startMinutes || nowMinute >= s.periods.last().endMinutes -> null
+        else -> s.periods.indexOfFirst { it.startMinutes > nowMinute }
+            .takeIf { it >= 0 }?.let { it.toFloat() * cellHpx }
+    }
+    val showNowLine = isCurrentWeek && projection.days.contains(todayWeekday) && nowLineY != null
+    val topSubtitle = when {
+        !isCurrentWeek || !projection.days.contains(todayWeekday) -> WeekDates.rangeLabel(s.start, week)
+        currentCourse != null -> buildString {
+            append("正在上 · ").append(currentCourse.course.name)
+            currentCourse.course.location.takeIf { it.isNotBlank() }?.let { append(" · ").append(it) }
+            remainingMinutes?.takeIf { it > 0 }?.let { append(" · 还剩 ").append(it).append(" 分钟") }
+        }
+        nextCourse != null -> {
+            val start = s.periods.getOrNull(nextCourse.startIndex)?.startMinutes
+            "下一节 · ${nextCourse.course.name}" + (start?.let { " · ${clock(it)}" } ?: "")
+        }
+        else -> "今天的课已结束"
+    }
 
     val layoutNow by rememberUpdatedState(layout)
     val weekNow by rememberUpdatedState(week)
@@ -458,7 +533,7 @@ fun Timetable(
                 val anchorY = (lastCentroid.y - bounds.headerPx).let {
                     if (it.isFinite()) it.coerceIn(0f, bounds.availH) else bounds.availH / 2f
                 }
-                animateZoomTo(nearestZoomRung(grid.zoom), anchorX, anchorY)
+                animateZoomTo(nearestZoomRung(grid.zoom, bounds.minZoom), anchorX, anchorY)
                 return@launch
             }
             val maxX = bounds.maxOffsetX(grid.zoom)
@@ -542,10 +617,16 @@ fun Timetable(
     }
 
     Column(Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = !immersive,
+            enter = expandVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)),
+            exit = shrinkVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)),
+        ) {
         KelaileTopBar(
             title = "",
-            collapseFraction = if (immersive) 1f else (grid.offsetY / (availH * .6f)).coerceIn(0f, 1f),
-            modifier = Modifier.graphicsLayer { translationY = if (immersive) -size.height else 0f },
+            collapseFraction = {
+                if (immersive) 1f else (grid.offsetY / (availH * .6f)).coerceIn(0f, 1f)
+            },
             titleContent = {
                 if (editMode) {
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -555,31 +636,28 @@ fun Timetable(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 } else {
                     Column(
-                        Modifier.fillMaxWidth().combinedClickable(
-                            // 点按打开周次选择器；长按无响应，避免误触
-                            onClick = { pickerOpen = true },
-                            onLongClick = { },
-                        ),
+                        Modifier.fillMaxWidth().clickable { pickerOpen = true },
                         verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
                         Text("第 " + week + " 周", style = MaterialTheme.typography.titleLarge, maxLines = 1)
                         Text(
-                            WeekDates.rangeLabel(s.start, week),
+                            topSubtitle,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             },
             actions = {
                 if (editMode) {
-                    GlassPillButton("撤销", onClick = onUndo, compact = true)
+                    GlassPillButton("撤销", onClick = onUndo, compact = true, enabled = canUndo)
                     Spacer(Modifier.width(6.dp))
                     GlassPillButton("回退", onClick = onRevert, compact = true)
                     Spacer(Modifier.width(6.dp))
@@ -597,7 +675,7 @@ fun Timetable(
                     Box {
                         Box(
                             Modifier
-                                .size(38.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .clickable { menu = true },
                             contentAlignment = Alignment.Center,
@@ -623,12 +701,14 @@ fun Timetable(
                 }
             },
         )
+        }
         if (data.courses.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 val canvas = LocalKelaileCanvas.current
                 val shape = KelaileShapes.rounded(KelaileShapes.sheet)
                 Column(
                     Modifier
+                        .widthIn(max = 380.dp)
                         .fillMaxWidth()
                         .then(KelaileElevation.soft(KelaileElevation.card, shape))
                         .glassPanel(shape, canvas.fill, canvas.strokeTop, canvas.strokeBottom)
@@ -642,7 +722,10 @@ fun Timetable(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    GlassPillButton("新增课程", onClick = onAdd)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassPillButton("新增课程", onClick = onAdd)
+                        GlassPillButton("导入课表", onClick = onImportFile, compact = true)
+                    }
                 }
             }
         } else {
@@ -705,7 +788,7 @@ fun Timetable(
                             var weekPull = 0f
                             var verticalOnly = true
                             var lastCentroid = Offset.Unspecified
-                            var lastRung = nearestZoomRung(grid.zoom)
+                            var lastRung = nearestZoomRung(grid.zoom, layoutNow.minZoom)
                             val primaryId = down.id
                             var lastUptime = down.uptimeMillis
                             // 长按判定：按下后原地不动超过系统长按时长，就吞掉这一轮的点击，
@@ -727,7 +810,7 @@ fun Timetable(
                                     if (zoomChange != 1f && zoomChange.isFinite()) {
                                         val z0 = grid.zoom
                                         val raw = z0 * zoomChange
-                                        val next = rubberZoom(raw)
+                                        val next = rubberZoom(raw, bounds.minZoom)
                                         if (next != z0) {
                                             val ratio = next / z0
                                             val ax = ((centroid.x - bounds.gutterPx)).coerceIn(0f, bounds.availW)
@@ -740,7 +823,7 @@ fun Timetable(
                                             )
                                             grid.zoom = next
 
-                                            val rung = nearestZoomRung(next)
+                                            val rung = nearestZoomRung(next, bounds.minZoom)
                                             if (rung != lastRung) {
                                                 lastRung = rung
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -802,12 +885,19 @@ fun Timetable(
                             // 双击不再缩放：空白格的「第一次点亮加号、第二次进编辑」本身就是两次单击，
                             // 再叠一层双击手势会把第二次点击吃掉，加号永远进不了编辑。
                             if (consumedByChild) return@awaitEachGesture
-                            // 原地长按：只给一次触觉反馈，不派发任何点击
+                            // 原地长按：空白格直接新建，课程卡仍交给单击打开详情
                             if (!started && !pinched &&
                                 lastUptime - down.uptimeMillis >= longPressTimeout
                             ) {
                                 longPressed = true
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val cell = cellAt(down.position.x, down.position.y)
+                                if (cell != null && courseAtPoint(down.position.x, down.position.y) == null) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    tappedCell = null
+                                    onAddAt(cell.weekday, cell.period)
+                                } else {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
                             }
                             val velocity = velocityTracker.calculateVelocity()
                             val bounds = layoutNow
@@ -825,7 +915,7 @@ fun Timetable(
                                 onWeekNow((weekNow + turnBy).coerceIn(1, settingsNow.weekCount))
                                 return@awaitEachGesture
                             }
-                            if (!pinched && settingsNow.autoHideBars && abs(pulledDown) > bounds.availH * .12f) {
+                            if (!pinched && settingsNow.autoHideBars && abs(pulledDown) > bounds.availH * .24f) {
                                 val next = pulledDown > 0
                                 if (next != immersive) { immersive = next; onImmersiveNow(next) }
                             }
@@ -893,8 +983,8 @@ fun Timetable(
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
                                     val gutterDp = with(density) { cellHpx.toDp().value }
-                                    val periodSize = (gutterDp / 5.6f).coerceIn(9f, 12f).sp
-                                    val clockSize = (gutterDp / 9.2f).coerceIn(7f, 9f).sp
+                                    val periodSize = (gutterDp / 5.6f).coerceIn(9.5f, 12f).sp
+                                    val clockSize = (gutterDp / 9.2f).coerceIn(8.5f, 9.5f).sp
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                                         Text(
@@ -902,7 +992,7 @@ fun Timetable(
                                             style = MaterialTheme.typography.labelMedium,
                                             fontSize = periodSize,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = if (isBlockStart) 1f else .75f
+                                                alpha = if (isBlockStart) 1f else .9f
                                             ),
                                         )
                                         if (pr.endMinutes > pr.startMinutes) {
@@ -920,7 +1010,7 @@ fun Timetable(
                                                     clock(pr.endMinutes),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     fontSize = clockSize,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .86f),
                                                 )
                                             }
                                         }
@@ -933,7 +1023,13 @@ fun Timetable(
 
                         val cellDp = with(density) { cellWpx.toDp() }
                         val contentW = with(density) { (cellWpx * dayCount).toDp() }
-                        Box(Modifier.fillMaxWidth().height(dayHeaderHeight).clipToBounds()) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(dayHeaderHeight)
+                                .clipToBounds()
+                                .background(palette.header),
+                        ) {
                             projection.days.forEachIndexed { dayIndex, day ->
                                 val date = WeekDates.on(s.start, week, day)
                                 val isToday = date == today
@@ -987,17 +1083,28 @@ fun Timetable(
                                             color = if (isToday) MaterialTheme.colorScheme.primary
                                             else palette.ink,
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                         Text(
-                                            WeekDates.dayLabel(s.start, week, day),
+                                            // 窄列只留「日」，避免 10/26 被裁成错误的 10/2
+                                            if (cellDp < 58.dp) date.dayOfMonth.toString()
+                                            else WeekDates.dayLabel(s.start, week, day),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (isToday) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     }
                                 }
                             }
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(palette.line),
+                            )
                         }
                         Box(Modifier.fillMaxSize().clipToBounds()) {
                             if (palette.lineStyle == GRID_LINE_DASHED) {
@@ -1029,29 +1136,28 @@ fun Timetable(
                                         .clipToBounds()
                                         .graphicsLayer { translationY = -grid.offsetY.roundToInt().toFloat() },
                                 ) {
-                                        Column {
-                                            repeat(periodCount) {
-                                                Box(
-                                                    Modifier
-                                                        .height(with(density) { cellHpx.toDp() })
-                                                        .fillMaxWidth()
-                                                        .padding(gridCellPadding(palette.lineStyle))
-                                                        .background(
-                                                            palette.cell,
-                                                            androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
-                                                        ),
+                                        val cellPadding = gridCellPadding(palette.lineStyle)
+                                        androidx.compose.foundation.Canvas(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .height(with(density) { (cellHpx * periodCount).toDp() }),
+                                        ) {
+                                            val gap = cellPadding.toPx()
+                                            val width = (size.width - gap * 2f).coerceAtLeast(0f)
+                                            val height = (cellHpx - gap * 2f).coerceAtLeast(0f)
+                                            val corner = minOf(
+                                                KelaileShapes.xs.toPx(),
+                                                width / 2f,
+                                                height / 2f,
+                                            )
+                                            repeat(periodCount) { row ->
+                                                drawRoundRect(
+                                                    color = palette.cell,
+                                                    topLeft = Offset(gap, row * cellHpx + gap),
+                                                    size = Size(width, height),
+                                                    cornerRadius = CornerRadius(corner),
                                                 )
                                             }
-                                        }
-                                        if (palette.lineStyle == GRID_LINE_DASHED) {
-                                            DashedGridLines(
-                                                columns = 0,
-                                                rows = periodCount,
-                                                cellW = cellWpx.toFloat(),
-                                                cellH = cellHpx.toFloat(),
-                                                color = palette.line,
-                                                modifier = Modifier.fillMaxSize(),
-                                            )
                                         }
                                         projection.placed[day].orEmpty().forEach { pc ->
                                             val course = pc.course
@@ -1059,7 +1165,9 @@ fun Timetable(
                                             val style = styles[course.id]
                                                 ?: courseVisual(course, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor)
                                             val located = locatedCourseId == course.id
-                                            val locatePulse = remember { Animatable(0f) }
+                                            val live = currentCourse?.course?.id == course.id
+                                            val locatePulse = remember(course.id) { Animatable(0f) }
+                                            val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs)
                                             LaunchedEffect(located) {
                                                 // 只在命中时驱动动画：非命中卡片不写状态，避免多余重组
                                                 if (located) {
@@ -1081,6 +1189,10 @@ fun Timetable(
                                                 // 不会露出一圈比格子底色更深的缝
                                                 .padding(gridCellPadding(palette.lineStyle))
                                                 .then(
+                                                    if (dragging?.course?.id == course.id) Modifier.alpha(.28f)
+                                                    else Modifier
+                                                )
+                                                .then(
                                                     if (located) Modifier
                                                         .graphicsLayer {
                                                             val boost = 1f + 0.03f * locatePulse.value
@@ -1092,8 +1204,13 @@ fun Timetable(
                                                             MaterialTheme.colorScheme.primary.copy(
                                                                 alpha = 0.5f + 0.5f * locatePulse.value,
                                                             ),
-                                                            gridCellShape,
+                                                            cardShape,
                                                         )
+                                                    else if (live) Modifier.border(
+                                                        1.5.dp,
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = .55f),
+                                                        cardShape,
+                                                    )
                                                     else Modifier
                                                 )
                                                 .then(
@@ -1130,9 +1247,13 @@ fun Timetable(
                                                 )
 
                                             val cardDp = with(density) { cellWpx.toDp().value }
+                                            val cardHeightDp = with(density) {
+                                                (cellHpx * (pc.endIndex - pc.startIndex + 1)).toDp().value
+                                            }
+                                            val dense = cardHeightDp < 86f || cardDp < 52f
                                             // 字号量化到 0.5sp：捏合时文本只在跨档才重排，不再逐帧抖动
-                                            val cardSize = quantizeSp((cardDp / 7.2f).coerceIn(7f, 12f)).sp
-                                            val metaSize = quantizeSp(cardSize.value * .82f).sp
+                                            val cardSize = quantizeSp((cardDp / 7.2f).coerceIn(9f, 13f)).sp
+                                            val metaSize = quantizeSp((cardSize.value * .84f).coerceIn(8f, 11f)).sp
                                             val textAlign = when (s.cellTextAlign) {
                                                 "center" -> androidx.compose.ui.text.style.TextAlign.Center
                                                 "end" -> androidx.compose.ui.text.style.TextAlign.End
@@ -1150,7 +1271,9 @@ fun Timetable(
                                                 else -> Alignment.Top
                                             }
                                             if (pc.startIndex >= 0 && pc.endIndex >= pc.startIndex) {
-                                                val meta = buildString {
+                                                val meta = if (dense) {
+                                                    "${course.startPeriod}—${course.endPeriod}节"
+                                                } else buildString {
                                                     append(course.startPeriod).append("—").append(course.endPeriod).append("节")
                                                     if (course.location.isNotBlank()) {
                                                         append('\n')
@@ -1164,9 +1287,9 @@ fun Timetable(
                                                 GlassCourseCard(
                                                     onClick = { onCourse(course) },
                                                     tint = style.background,
-                                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(KelaileShapes.xs),
+                                                    shape = cardShape,
                                                     modifier = card,
-                                                    contentPadding = 5.dp,
+                                                    contentPadding = if (dense) 4.dp else 5.dp,
                                                     contentAlignment = alignH,
                                                     contentVerticalArrangement = alignV,
                                                 ) {
@@ -1176,20 +1299,21 @@ fun Timetable(
                                                         fontSize = cardSize,
                                                         lineHeight = cardSize * 1.06f,
                                                         fontWeight = FontWeight.Bold,
-                                                        maxLines = 3,
+                                                        maxLines = if (dense) 2 else 3,
                                                         textAlign = textAlign,
                                                         modifier = Modifier.fillMaxWidth(),
-                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                        overflow = TextOverflow.Ellipsis,
                                                     )
+                                                    Spacer(Modifier.height(1.dp))
                                                     Text(
                                                         meta,
-                                                        color = style.ink.copy(alpha = .85f),
+                                                        color = style.ink.copy(alpha = .92f),
                                                         fontSize = metaSize,
                                                         lineHeight = metaSize * 1.15f,
-                                                        maxLines = 4,
+                                                        maxLines = if (dense) 1 else 3,
                                                         textAlign = textAlign,
                                                         modifier = Modifier.fillMaxWidth(),
-                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                        overflow = TextOverflow.Ellipsis,
                                                     )
                                                 }
                                             }
@@ -1201,13 +1325,27 @@ fun Timetable(
                     }
                 }
 
+                if (showNowLine && nowLineY != null) {
+                    val lineY = headerPx + nowLineY - grid.offsetY
+                    if (lineY >= headerPx && lineY <= headerPx + availH) {
+                        Box(
+                            Modifier
+                                .offset { IntOffset(0, lineY.roundToInt()) }
+                                .fillMaxWidth()
+                                .height(1.5.dp)
+                                .padding(start = gutterWidth)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = .9f)),
+                        )
+                    }
+                }
+
                 dragging?.let { ghost ->
                     val ghostStyle = styles[ghost.course.id]
                         ?: courseVisual(ghost.course, data.colors, s.defaultColor, canvasColors.isDark, s.courseCellColor)
                     Box(
                         Modifier
                             .offset { IntOffset(dragAt.x.roundToInt(), dragAt.y.roundToInt()) }
-                            .width(with(density) { cellWpx.toDp() })
+                            .width(with(density) { (cellWpx / ghost.laneCount.coerceAtLeast(1)).toDp() })
                             .height(with(density) { (cellHpx * (ghost.endIndex - ghost.startIndex + 1)).toDp() })
                             .padding(gridCellPadding(palette.lineStyle))
                             .then(
@@ -1242,17 +1380,30 @@ fun Timetable(
                                 .border(1.5.dp, accent.copy(alpha = .72f), cellShape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-                                val half = size.minDimension / 2f
-                                val pen = 2.dp.toPx()
-                                drawLine(
-                                    accent, Offset(center.x - half, center.y), Offset(center.x + half, center.y),
-                                    strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                                )
-                                drawLine(
-                                    accent, Offset(center.x, center.y - half), Offset(center.x, center.y + half),
-                                    strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                                )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+                                    val half = size.minDimension / 2f
+                                    val pen = 2.dp.toPx()
+                                    drawLine(
+                                        accent, Offset(center.x - half, center.y), Offset(center.x + half, center.y),
+                                        strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                    )
+                                    drawLine(
+                                        accent, Offset(center.x, center.y - half), Offset(center.x, center.y + half),
+                                        strokeWidth = pen, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                    )
+                                }
+                                if (cellWpx >= with(density) { 52.dp.toPx() }) {
+                                    Text(
+                                        "再点一次",
+                                        color = accent,
+                                        fontSize = 8.sp,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1309,7 +1460,7 @@ fun Timetable(
             try {
                 val bounds = layoutNow
                 if (grid.zoom < 1.6f) {
-                    animateZoomTo(nearestZoomRung(1.8f), bounds.availW / 2f, bounds.availH / 2f)
+                    animateZoomTo(nearestZoomRung(1.8f, bounds.minZoom), bounds.availW / 2f, bounds.availH / 2f)
                 }
                 val live = layoutNow
                 val placed = projectionNow.placed[projectionNow.days[dayIndex]].orEmpty().first { it.course.id == id }
@@ -1354,6 +1505,9 @@ private fun WeekPickerSheet(
     val state = rememberLazyListState(
         initialFirstVisibleItemIndex = (viewWeek - 2).coerceAtLeast(0),
     )
+    LaunchedEffect(open) {
+        if (open) state.scrollToItem((viewWeek - 2).coerceAtLeast(0))
+    }
     val canvas = LocalKelaileCanvas.current
     GlassSheet(visible = open, onDismiss = onDismiss, title = "选择周次") {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1373,6 +1527,7 @@ private fun WeekPickerSheet(
             }
             LazyRow(
                 state = state,
+                modifier = Modifier.selectableGroup(),
                 contentPadding = PaddingValues(vertical = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -1385,7 +1540,7 @@ private fun WeekPickerSheet(
                                 if (selected) MaterialTheme.colorScheme.primary
                                 else canvas.fill,
                             )
-                            .clickable { onPick(w) }
+                            .selectable(selected = selected, role = Role.RadioButton) { onPick(w) }
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(2.dp),

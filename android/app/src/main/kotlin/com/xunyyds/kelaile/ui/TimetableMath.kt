@@ -36,7 +36,16 @@ internal data class GridLayout(
      * 让最后一节课能滚到底栏之上，而不是被底栏压住。
      */
     val bottomRows: Int = 0,
+    /** 单列可读下限；不足时默认就放大到可横向滚动，而不是把字号压到 7sp。 */
+    val minCellPx: Float = 0f,
 ) {
+    val minZoom: Float
+        get() {
+            val fit = availW / dayCount.coerceAtLeast(1)
+            if (minCellPx <= 0f || fit <= 0f) return GRID_MIN_ZOOM
+            return (minCellPx / fit).coerceIn(GRID_MIN_ZOOM, GRID_MAX_ZOOM)
+        }
+
     fun cellWidth(zoom: Float): Float = availW / dayCount.coerceAtLeast(1) * zoom
 
     fun cellHeight(zoom: Float): Float = cellWidth(zoom) * GRID_ROW_ASPECT
@@ -69,7 +78,7 @@ internal class TimetableGridState(initialZoom: Float = GRID_MIN_ZOOM) {
     var offsetY by mutableFloatStateOf(0f)
 
     fun clampInto(layout: GridLayout) {
-        zoom = zoom.coerceIn(GRID_MIN_ZOOM, GRID_MAX_ZOOM)
+        zoom = zoom.coerceIn(layout.minZoom, GRID_MAX_ZOOM)
         offsetX = clampOffset(offsetX, layout.availW, layout.contentWidth(zoom))
         offsetY = clampOffset(offsetY, layout.availH, layout.contentHeight(zoom))
     }
@@ -97,8 +106,12 @@ internal fun zoomLadder(
     return rungs
 }
 
-internal fun nearestZoomRung(zoom: Float, rungs: List<Float> = zoomLadder()): Float {
-    if (rungs.isEmpty()) return GRID_MIN_ZOOM
+internal fun nearestZoomRung(
+    zoom: Float,
+    min: Float = GRID_MIN_ZOOM,
+    rungs: List<Float> = zoomLadder(min),
+): Float {
+    if (rungs.isEmpty()) return min
     var best = rungs.first()
     var bestDistance = abs(best - zoom)
     rungs.forEach { rung ->
@@ -111,11 +124,17 @@ internal fun nearestZoomRung(zoom: Float, rungs: List<Float> = zoomLadder()): Fl
     return best
 }
 
-internal fun nextZoomRung(zoom: Float, rungs: List<Float> = zoomLadder()): Float =
-    rungs.firstOrNull { it > zoom + 1e-3f } ?: rungs.last()
+internal fun nextZoomRung(
+    zoom: Float,
+    min: Float = GRID_MIN_ZOOM,
+    rungs: List<Float> = zoomLadder(min),
+): Float = rungs.firstOrNull { it > zoom + 1e-3f } ?: rungs.last()
 
-internal fun previousZoomRung(zoom: Float, rungs: List<Float> = zoomLadder()): Float =
-    rungs.lastOrNull { it < zoom - 1e-3f } ?: rungs.first()
+internal fun previousZoomRung(
+    zoom: Float,
+    min: Float = GRID_MIN_ZOOM,
+    rungs: List<Float> = zoomLadder(min),
+): Float = rungs.lastOrNull { it < zoom - 1e-3f } ?: rungs.first()
 
 internal fun clampOffset(offset: Float, viewport: Float, content: Float): Float {
     val max = (content - viewport).coerceAtLeast(0f)

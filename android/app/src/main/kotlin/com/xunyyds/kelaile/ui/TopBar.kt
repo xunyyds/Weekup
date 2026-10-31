@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -36,6 +38,7 @@ import com.xunyyds.kelaile.ui.glass.glassPanel
 import com.xunyyds.kelaile.ui.glass.glassSheen
 import com.xunyyds.kelaile.ui.glass.glassSource
 import com.xunyyds.kelaile.ui.glass.wallpaperBlurGlass
+import kotlin.math.roundToInt
 
 /**
  * 顶栏：悬浮液态玻璃胶囊。
@@ -47,7 +50,7 @@ import com.xunyyds.kelaile.ui.glass.wallpaperBlurGlass
 @Composable
 fun KelaileTopBar(
     title: String,
-    collapseFraction: Float,
+    collapseFraction: () -> Float,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     expandedHeight: Dp = 54.dp,
@@ -55,11 +58,9 @@ fun KelaileTopBar(
     titleContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    val f = collapseFraction.coerceIn(0f, 1f)
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val canvas = LocalKelaileCanvas.current
     val shape = RoundedCornerShape(KelaileShapes.capsule)
-    val body = expandedHeight + (collapsedHeight - expandedHeight) * f
     val base = Modifier
         .then(KelaileElevation.soft(6.dp, shape, 0.03f, 0.07f))
         .wallpaperBlurGlass(
@@ -76,7 +77,14 @@ fun KelaileTopBar(
             .then(base)
             .glassPanel(shape, Color.Transparent, canvas.strokeTop, canvas.strokeBottom)
             .glassSheen(shape, Color.White)
-            .height(body)
+            // 高度在布局阶段读取滚动状态，滚动时不再触发整页重组
+            .layout { measurable, constraints ->
+                val f = collapseFraction().coerceIn(0f, 1f)
+                val height = (expandedHeight.toPx() + (collapsedHeight.toPx() - expandedHeight.toPx()) * f)
+                    .roundToInt()
+                val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            }
             .padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -98,7 +106,9 @@ fun KelaileTopBar(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.alpha(1f - f),
+                        modifier = Modifier.graphicsLayer {
+                            alpha = 1f - collapseFraction().coerceIn(0f, 1f)
+                        },
                     )
                 }
             }
