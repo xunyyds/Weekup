@@ -415,7 +415,7 @@ fun KelaileApp() {
                                             } catch (e: Exception) { message("导入参数不一致：${e.message}") }
                                         }
                                         else -> Column(Modifier.fillMaxSize()) {
-                                            MotionContent("tab$tab", Modifier.weight(1f)) { target ->
+                                            MotionContent("tab$tab", Modifier.weight(1f), tabSwitch = true) { target ->
                                                 tabStateHolder.SaveableStateProvider(target) {
                                                 when (target) {
                                                     "tab$TAB_TIMETABLE" -> Timetable(

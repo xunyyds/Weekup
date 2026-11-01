@@ -42,6 +42,23 @@ object KelaileMotion {
 
     const val reduced = 80
 
+    /** tab 切换：进 160ms、出 100ms、位移 3%，底部导航应几乎瞬时。 */
+    const val tabEnter = 160
+
+    const val tabExit = 100
+
+    const val tabTravel = 0.03f
+
+    /** 层级页前进：旧页加速退出、新页减速推入。 */
+    const val slideEnter = 300
+
+    const val slideExit = 220
+
+    /** 返回比前进更快，形成「退回上一层」的节奏差。 */
+    const val slideBackEnter = 250
+
+    const val slideBackExit = 200
+
     const val staggerStep = 34
     const val staggerMax = 9
 
@@ -147,43 +164,70 @@ internal fun powerSaveModeActive(): Boolean {
 fun MotionContent(
     target: String,
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+    /** tab 之间的切换：只要极短的横向淡入，不走整页滑动 */
+    tabSwitch: Boolean = false,
     content: @Composable (String) -> Unit,
 ) {
     val enabled = kelaileMotionEnabled()
     val style = LocalTransitionStyle.current
-    val enterMillis = kelaileMillis(if (style == "fade") KelaileMotion.quick else KelaileMotion.emphasized)
-    val exitMillis = kelaileMillis(KelaileMotion.quick)
     val reducedMillis = kelaileMillis(KelaileMotion.reduced)
+    // transitionSpec 不是 @Composable 作用域，所有时长必须在这里先算好
+    val tabEnterMillis = kelaileMillis(KelaileMotion.tabEnter)
+    val tabExitMillis = kelaileMillis(KelaileMotion.tabExit)
+    val fadeEnterMillis = kelaileMillis(KelaileMotion.quick)
+    val fadeExitMillis = kelaileMillis(KelaileMotion.fast)
+    val forwardEnterMillis = kelaileMillis(KelaileMotion.slideEnter)
+    val forwardExitMillis = kelaileMillis(KelaileMotion.slideExit)
+    val backEnterMillis = kelaileMillis(KelaileMotion.slideBackEnter)
+    val backExitMillis = kelaileMillis(KelaileMotion.slideBackExit)
     AnimatedContent(
         targetState = target,
         modifier = modifier,
         contentKey = { it },
         transitionSpec = {
-            when {
+            if (!enabled) {
                 // 减少动画不硬切，只留一次极短淡入淡出，保留「换页了」的状态感知
-                !enabled -> (
-                    fadeIn(tween(reducedMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
-                        fadeOut(tween(reducedMillis, easing = KelaileMotion.accelerateEasing))
-                    ).using(null)
-                style == "fade" -> (
-                    fadeIn(tween(enterMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
-                        fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
-                    ).using(null)
-                else -> {
-                    val direction = navigationDirection(initialState, targetState)
-                    val travel = if (style == "standard") .10f else .045f
-                    // 只动位移与透明度：两者都能走合成层，不再叠一层几乎看不出的缩放
-                    val enter = slideInHorizontally(
-                        tween(enterMillis, easing = KelaileMotion.emphasizedEasing),
-                    ) { (it * travel * direction).toInt() } +
-                        fadeIn(tween(enterMillis / 2, easing = KelaileMotion.decelerateEasing))
-                    val exit = slideOutHorizontally(
-                        tween(exitMillis, easing = KelaileMotion.accelerateEasing),
-                    ) { (-it * travel * .7f * direction).toInt() } +
-                        fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
-                    (enter togetherWith exit).using(
-                        SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() }),
-                    )
+                (fadeIn(tween(reducedMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
+                    fadeOut(tween(reducedMillis, easing = KelaileMotion.accelerateEasing))).using(null)
+            } else {
+                val direction = navigationDirection(initialState, targetState)
+                when {
+                    // tab 切换：160ms 横移 + 淡入，退出只用 100ms 轻推
+                    tabSwitch -> {
+                        val travel = KelaileMotion.tabTravel * direction
+                        val enterSpec = slideInHorizontally(
+                            tween(tabEnterMillis, easing = KelaileMotion.decelerateEasing),
+                        ) { (it * travel).toInt() } +
+                            fadeIn(tween(tabEnterMillis, easing = KelaileMotion.decelerateEasing))
+                        val exitSpec = slideOutHorizontally(
+                            tween(tabExitMillis, easing = KelaileMotion.accelerateEasing),
+                        ) { (-it * travel * 0.35f).toInt() } +
+                            fadeOut(tween(tabExitMillis, easing = KelaileMotion.accelerateEasing))
+                        (enterSpec togetherWith exitSpec).using(null)
+                    }
+                    style == "fade" -> {
+                        (fadeIn(tween(fadeEnterMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
+                            fadeOut(tween(fadeExitMillis, easing = KelaileMotion.accelerateEasing))).using(null)
+                    }
+                    else -> {
+                        // 层级页：前进 300/220ms，返回 250/200ms（back 比 forward 快）
+                        val forward = routeDepth(targetState) >= routeDepth(initialState)
+                        val enter = if (forward) forwardEnterMillis else backEnterMillis
+                        val exit = if (forward) forwardExitMillis else backExitMillis
+                        val travel = (if (style == "standard") 1f else .55f) * direction
+                        // 新页从侧边推入并减速停住；旧页加速退出并轻微后退
+                        val enterSpec = slideInHorizontally(
+                            tween(enter, easing = KelaileMotion.decelerateEasing),
+                        ) { (it * travel).toInt() } +
+                            fadeIn(tween(enter * 2 / 3, easing = KelaileMotion.decelerateEasing))
+                        val exitSpec = slideOutHorizontally(
+                            tween(exit, easing = KelaileMotion.accelerateEasing),
+                        ) { (-it * travel * .3f).toInt() } +
+                            fadeOut(tween(exit, easing = KelaileMotion.accelerateEasing))
+                        (enterSpec togetherWith exitSpec).using(
+                            SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() }),
+                        )
+                    }
                 }
             }
         },
