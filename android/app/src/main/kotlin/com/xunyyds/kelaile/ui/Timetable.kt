@@ -7,6 +7,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -464,10 +466,18 @@ fun Timetable(
         if (layout.availW > 1f && layout.availH > 1f) grid.clampInto(layout)
     }
 
+    val weekSlideEnabled = kelaileMotionEnabled()
+    val weekSlideEnabledNow by rememberUpdatedState(weekSlideEnabled)
     LaunchedEffect(week) {
         val direction = if (week >= slideFrom) 1f else -1f
         slideFrom = week
-        slide.snapTo(direction * .30f)
+        // 减少动画时不做位移，翻周直接换内容
+        if (!weekSlideEnabledNow) {
+            slide.snapTo(0f)
+            return@LaunchedEffect
+        }
+        // 从同一侧压入再回落，位移与透明度同时收敛，避免只位移造成的「卡片撕裂」观感
+        slide.snapTo(direction * .22f)
         slide.animateTo(0f, tween(durationMillis = snapMillis, easing = KelaileMotion.emphasizedEasing))
     }
 
@@ -624,8 +634,11 @@ fun Timetable(
     Column(Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = !immersive,
-            enter = expandVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)),
-            exit = shrinkVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)),
+            // 收起时先淡出再收高度，展开时反之，避免文字被压成一条
+            enter = expandVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)) +
+                fadeIn(tween(snapMillis / 2, easing = KelaileMotion.decelerateEasing)),
+            exit = shrinkVertically(animationSpec = tween(snapMillis, easing = KelaileMotion.emphasizedEasing)) +
+                fadeOut(tween(snapMillis / 2, easing = KelaileMotion.accelerateEasing)),
         ) {
         KelaileTopBar(
             title = "",

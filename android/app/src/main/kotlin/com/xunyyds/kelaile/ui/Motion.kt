@@ -5,7 +5,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.CubicBezierEasing
@@ -16,8 +15,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -28,12 +25,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.collect
 
 object KelaileMotion {
 
@@ -47,10 +40,16 @@ object KelaileMotion {
 
     const val slow = 460
 
+    const val reduced = 80
+
     const val staggerStep = 34
     const val staggerMax = 9
 
     const val staggerRise = 12
+
+    const val sheetEnterDp = 160f
+
+    const val pressScale = 0.96f
 
     val standardEasing = CubicBezierEasing(0.22f, 0f, 0f, 1f)
 
@@ -63,10 +62,13 @@ object KelaileMotion {
     val legacyEasing = FastOutSlowInEasing
 
     fun <T> settle(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
-        spring(dampingRatio = 0.82f, stiffness = 380f)
+        spring(dampingRatio = 0.8f, stiffness = 350f)
 
     fun <T> gentle(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
         spring(dampingRatio = 1f, stiffness = Spring.StiffnessLow)
+
+    fun <T> press(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
+        spring(dampingRatio = 0.7f, stiffness = 600f)
 }
 
 internal val LocalKelaileMotionEnabled = staticCompositionLocalOf<Boolean?> { null }
@@ -87,11 +89,10 @@ internal fun systemMotionEnabled(): Boolean {
     fun readScale(): Float = runCatching {
         Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
     }.getOrDefault(1f)
-    var globalScale by remember(resolver) { mutableStateOf(readScale()) }
-    var composeScale by remember { mutableStateOf(1f) }
+    var scale by remember(resolver) { mutableStateOf(readScale()) }
     DisposableEffect(resolver) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) { globalScale = readScale() }
+            override fun onChange(selfChange: Boolean) { scale = readScale() }
         }
         val registered = runCatching {
             resolver.registerContentObserver(
@@ -100,14 +101,11 @@ internal fun systemMotionEnabled(): Boolean {
                 observer,
             )
         }.isSuccess
-        globalScale = readScale()
+        scale = readScale()
         onDispose { if (registered) resolver.unregisterContentObserver(observer) }
     }
-    LaunchedEffect(Unit) {
-        val durationScale = currentCoroutineContext()[MotionDurationScale]
-        snapshotFlow { durationScale?.scaleFactor ?: 1f }.collect { composeScale = it }
-    }
-    return globalScale > 0f && composeScale > 0f
+    // 动画器缩放为 0 时系统会直接跳过 Compose 动画，这里同步降级为短淡入
+    return scale > 0f
 }
 
 @Composable
@@ -155,13 +153,18 @@ fun MotionContent(
     val style = LocalTransitionStyle.current
     val enterMillis = kelaileMillis(if (style == "fade") KelaileMotion.quick else KelaileMotion.emphasized)
     val exitMillis = kelaileMillis(KelaileMotion.quick)
+    val reducedMillis = kelaileMillis(KelaileMotion.reduced)
     AnimatedContent(
         targetState = target,
         modifier = modifier,
         contentKey = { it },
         transitionSpec = {
             when {
-                !enabled -> (EnterTransition.None togetherWith ExitTransition.None).using(null)
+                // 减少动画不硬切，只留一次极短淡入淡出，保留「换页了」的状态感知
+                !enabled -> (
+                    fadeIn(tween(reducedMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
+                        fadeOut(tween(reducedMillis, easing = KelaileMotion.accelerateEasing))
+                    ).using(null)
                 style == "fade" -> (
                     fadeIn(tween(enterMillis, easing = KelaileMotion.decelerateEasing)) togetherWith
                         fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
@@ -169,16 +172,15 @@ fun MotionContent(
                 else -> {
                     val direction = navigationDirection(initialState, targetState)
                     val travel = if (style == "standard") .10f else .045f
+                    // 只动位移与透明度：两者都能走合成层，不再叠一层几乎看不出的缩放
                     val enter = slideInHorizontally(
                         tween(enterMillis, easing = KelaileMotion.emphasizedEasing),
                     ) { (it * travel * direction).toInt() } +
-                        fadeIn(tween(enterMillis / 2, easing = KelaileMotion.decelerateEasing)) +
-                        scaleIn(tween(enterMillis, easing = KelaileMotion.emphasizedEasing), initialScale = .985f)
+                        fadeIn(tween(enterMillis / 2, easing = KelaileMotion.decelerateEasing))
                     val exit = slideOutHorizontally(
                         tween(exitMillis, easing = KelaileMotion.accelerateEasing),
                     ) { (-it * travel * .7f * direction).toInt() } +
-                        fadeOut(tween(exitMillis / 2, easing = KelaileMotion.accelerateEasing)) +
-                        scaleOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing), targetScale = .992f)
+                        fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
                     (enter togetherWith exit).using(
                         SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() }),
                     )

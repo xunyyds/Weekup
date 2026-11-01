@@ -60,21 +60,21 @@ import kotlinx.coroutines.delay
 fun KelaileSplash(visible: Boolean, modifier: Modifier = Modifier) {
     val motion = kelaileMotionEnabled()
     val canvas = LocalKelaileCanvas.current
+    val reducedMillis = kelaileMillis(KelaileMotion.reduced)
     var drawn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (motion) delay(80)
         drawn = true
     }
+    // 减少动画时不缩放、只淡入，仍然让用户看到「启动了」而不是瞬间闪现
     val entrance by animateFloatAsState(
-        if (drawn) 1f else .84f,
-        animationSpec = if (motion) {
-            tween(kelaileMillis(KelaileMotion.slow), easing = KelaileMotion.emphasizedEasing)
-        } else tween(0),
+        if (!motion) 1f else if (drawn) 1f else .84f,
+        animationSpec = tween(kelaileMillis(KelaileMotion.slow), easing = KelaileMotion.emphasizedEasing),
         label = "Splash entrance",
     )
     val alpha by animateFloatAsState(
         if (drawn) 1f else 0f,
-        animationSpec = if (motion) tween(kelaileMillis(KelaileMotion.emphasized)) else tween(0),
+        animationSpec = tween(if (motion) kelaileMillis(KelaileMotion.emphasized) else reducedMillis),
         label = "Splash alpha",
     )
     val ink = MaterialTheme.colorScheme.primary
@@ -83,8 +83,13 @@ fun KelaileSplash(visible: Boolean, modifier: Modifier = Modifier) {
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
-        enter = if (motion) fadeIn(tween(200)) else fadeIn(tween(0)),
-        exit = if (motion) fadeOut(tween(320)) + scaleOut(tween(320), targetScale = 1.04f) else fadeOut(tween(0)),
+        enter = fadeIn(tween(if (motion) kelaileMillis(KelaileMotion.quick) else reducedMillis)),
+        exit = if (motion) {
+            fadeOut(tween(kelaileMillis(KelaileMotion.standard))) +
+                scaleOut(tween(kelaileMillis(KelaileMotion.standard)), targetScale = 1.04f)
+        } else {
+            fadeOut(tween(reducedMillis))
+        },
     ) {
         Box(Modifier.fillMaxSize()) {
             KelaileBackdrop(Modifier.matchParentSize())

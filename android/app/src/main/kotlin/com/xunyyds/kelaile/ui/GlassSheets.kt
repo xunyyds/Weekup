@@ -1,6 +1,7 @@
 package com.xunyyds.kelaile.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,28 +79,33 @@ private fun OverlayHost(
     content: @Composable (progress: Float) -> Unit,
 ) {
     val motion = kelaileMotionEnabled()
+    val enterMillis = kelaileMillis(KelaileMotion.standard)
+    val exitMillis = kelaileMillis(KelaileMotion.quick)
+    val reducedMillis = kelaileMillis(KelaileMotion.reduced)
     var mounted by remember { mutableStateOf(visible) }
     val progress = remember { Animatable(if (visible) 1f else 0f) }
     LaunchedEffect(visible) {
         if (visible) {
             mounted = true
             if (!motion) {
-                progress.snapTo(1f)
+                // 减少动画时不做位移缩放，只留一次极短淡入
+                progress.snapTo(0f)
+                progress.animateTo(1f, tween(reducedMillis, easing = KelaileMotion.decelerateEasing))
             } else {
                 progress.snapTo(0f)
                 progress.animateTo(
                     1f,
-                    tween(KelaileMotion.standard, easing = KelaileMotion.emphasizedEasing),
+                    spring(dampingRatio = 0.86f, stiffness = 420f),
                 )
             }
         } else if (mounted) {
             if (motion) {
                 progress.animateTo(
                     0f,
-                    tween(KelaileMotion.quick, easing = KelaileMotion.accelerateEasing),
+                    tween(exitMillis, easing = KelaileMotion.accelerateEasing),
                 )
             } else {
-                progress.snapTo(0f)
+                progress.animateTo(0f, tween(reducedMillis, easing = KelaileMotion.accelerateEasing))
             }
             mounted = false
         }
@@ -195,7 +201,9 @@ fun GlassSheet(
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(horizontal = 10.dp, vertical = 10.dp)
-                    .graphicsLayer { translationY = (1f - eased) * 220.dp.toPx() + drag }
+                    .graphicsLayer {
+                        translationY = (1f - eased) * KelaileMotion.sheetEnterDp.dp.toPx() + drag
+                    }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.05f, 0.12f))
                     .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
                     .glassSheen(shape, Color.White),
@@ -212,7 +220,10 @@ fun GlassSheet(
                                 },
                                 onDragEnd = {
                                     val heightPx = size.height.toFloat().coerceAtLeast(1f)
-                                    if (drag > heightPx * 0.16f) onDismiss() else drag = 0f
+                                    if (drag > heightPx * 0.16f) {
+                                        drag = 0f
+                                        onDismiss()
+                                    } else drag = 0f
                                 },
                                 onDragCancel = { drag = 0f },
                             )
@@ -295,9 +306,11 @@ fun KelaileDialog(
                     .heightIn(max = 520.dp)
                     .graphicsLayer {
                         alpha = eased
-                        val s = 0.94f + 0.06f * eased
-                        scaleX = s
-                        scaleY = s
+                        if (motion) {
+                            val s = 0.96f + 0.04f * eased
+                            scaleX = s
+                            scaleY = s
+                        }
                     }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.06f, 0.14f))
                     .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)
@@ -378,9 +391,11 @@ fun GlassDialogScaffold(
                     .fillMaxWidth()
                     .graphicsLayer {
                         alpha = eased
-                        val s = 0.94f + 0.06f * eased
-                        scaleX = s
-                        scaleY = s
+                        if (motion) {
+                            val s = 0.96f + 0.04f * eased
+                            scaleX = s
+                            scaleY = s
+                        }
                     }
                     .then(KelaileElevation.soft(KelaileElevation.floating, shape, 0.06f, 0.14f))
                     .glassPanel(shape, canvas.sheetFill, canvas.strokeTop, canvas.strokeBottom)

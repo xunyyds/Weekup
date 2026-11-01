@@ -610,7 +610,7 @@ private fun PanelDock(
 
     val settledPosition by animateFloatAsState(
         if (dragging) dragPosition else selected.toFloat(),
-        animationSpec = if (motion && !dragging) spring(dampingRatio = 0.78f, stiffness = 360f) else snap(),
+        animationSpec = if (motion && !dragging) KelaileMotion.settle() else snap(),
         label = "Dock indicator position",
     )
     // position 是「浮点索引」（0f..lastIndex），不是 0..1 的比例，槽宽换算交给上层
@@ -712,9 +712,8 @@ private fun PanelDock(
                     val pressed by source.collectIsPressedAsState()
                     val scale by animateFloatAsState(
                         if (pressed && motion) 0.94f else 1f,
-                        animationSpec = if (motion) {
-                            tween(KelaileMotion.fast, easing = KelaileMotion.emphasizedEasing)
-                        } else snap(),
+                        // 按压走弹簧：按下立刻跟手，松手带一点回弹
+                        animationSpec = if (motion) KelaileMotion.press() else snap(),
                         label = "Dock tab press",
                     )
                     val ink = when {
@@ -1090,10 +1089,8 @@ fun GlassCourseCard(
     val motion = kelaileMotionEnabled()
     val canvas = LocalKelaileCanvas.current
     val scale by animateFloatAsState(
-        if (pressed && motion) 0.968f else 1f,
-        animationSpec = if (motion) {
-            spring(dampingRatio = 0.72f, stiffness = 620f)
-        } else snap(),
+        if (pressed && motion) KelaileMotion.pressScale else 1f,
+        animationSpec = if (motion) KelaileMotion.press() else snap(),
         label = "Course card press",
     )
     val haptic = LocalHapticFeedback.current
@@ -1148,8 +1145,16 @@ fun GlassPillButton(
     val shape = RoundedCornerShape(KelaileShapes.capsule)
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val motion = kelaileMotionEnabled()
+    // 胶囊按钮补一层按压缩放：之前只有底色变化，点起来偏「软」
+    val scale by animateFloatAsState(
+        if (pressed && enabled && motion) 0.965f else 1f,
+        animationSpec = if (motion) KelaileMotion.press() else snap(),
+        label = "Pill press",
+    )
     Box(
         modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(KelaileElevation.soft(4.dp, shape, 0.02f, 0.05f))
             .glassPanel(shape, canvas.fillElevated, canvas.strokeTop, canvas.strokeBottom)
             .background(tint.copy(alpha = when {

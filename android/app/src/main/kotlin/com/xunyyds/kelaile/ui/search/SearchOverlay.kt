@@ -2,7 +2,6 @@ package com.xunyyds.kelaile.ui.search
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -174,18 +173,21 @@ fun SharedTransitionScope.KelaileSearchOverlay(
     val scrimAlpha = remember { Animatable(0f) }
     val cornerMillis = kelaileMillis(KelaileMotion.standard)
     val scrimMillis = kelaileMillis(KelaileMotion.quick)
+    val reducedMillis = kelaileMillis(KelaileMotion.reduced)
     LaunchedEffect(visible) {
         if (!motion) {
-            radius.snapTo(0f)
-            scrimAlpha.snapTo(if (visible) 1f else 0f)
+            // 减少动画：只做极短淡入淡出，圆角直接到位
+            radius.snapTo(if (visible) 0f else SearchPillRadius.value)
+            scrimAlpha.animateTo(if (visible) 1f else 0f, tween(reducedMillis))
             return@LaunchedEffect
         }
         if (visible) {
             radius.animateTo(0f, tween(cornerMillis, easing = KelaileMotion.emphasizedEasing))
-            scrimAlpha.animateTo(1f, tween(scrimMillis))
+            scrimAlpha.animateTo(1f, tween(scrimMillis, easing = KelaileMotion.decelerateEasing))
         } else {
-            scrimAlpha.snapTo(0f)
-            radius.snapTo(SearchPillRadius.value)
+            // 退场时圆角与遮罩一起收回，不要一关就跳到最终值
+            scrimAlpha.animateTo(0f, tween(scrimMillis, easing = KelaileMotion.accelerateEasing))
+            radius.animateTo(SearchPillRadius.value, tween(cornerMillis, easing = KelaileMotion.accelerateEasing))
         }
     }
     val sharedBar = if (motion) {
@@ -197,8 +199,11 @@ fun SharedTransitionScope.KelaileSearchOverlay(
         Modifier
     }
 
-    val enter = if (motion) fadeIn(tween(kelaileMillis(KelaileMotion.quick))) else EnterTransition.None
-    val exit = if (motion) fadeOut(tween(kelaileMillis(KelaileMotion.fast))) else ExitTransition.None
+    // 减少动画时保留一次很短的淡入淡出，避免面板硬切出现
+    val enterMillis = kelaileMillis(if (motion) KelaileMotion.quick else KelaileMotion.reduced)
+    val exitMillis = kelaileMillis(if (motion) KelaileMotion.fast else KelaileMotion.reduced)
+    val enter = fadeIn(tween(enterMillis, easing = KelaileMotion.decelerateEasing))
+    val exit = fadeOut(tween(exitMillis, easing = KelaileMotion.accelerateEasing))
 
     AnimatedVisibility(visible = visible, enter = enter, exit = exit) {
         Box(Modifier.fillMaxSize()) {
